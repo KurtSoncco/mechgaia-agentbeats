@@ -1,0 +1,9 @@
+tunnel: 77a45c21-fa38-4ef9-b101-5fd554ddaaa3
+credentials-file: /home/kurt-asus/.cloudflared/77a45c21-fa38-4ef9-b101-5fd554ddaaa3.json
+
+ingress:
+  - hostname: white.mechgaia.org
+    service: http://127.0.0.1:9002  # Controller (proxies to white agent on 9003)
+  - hostname: green.mechgaia.org
+    service: http://127.0.0.1:9001
+  - service: http_status:404
