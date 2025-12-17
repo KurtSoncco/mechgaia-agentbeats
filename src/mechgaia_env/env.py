@@ -163,6 +163,8 @@ Solve the mechanical engineering problems step by step using the available tools
 
         self.current_step = 0
         self.solved = False
+        # Reset Python namespace for new task (clear sandbox persistent state)
+        self.sandbox.persistent_namespace = {}
 
         # Try to load from database first
         if self.task_instance_id:
@@ -250,7 +252,7 @@ Use the available tools to solve this problem step by step.
                 "gold_answer": instance.get("gold_answer", {}),
                 "type": "calculation",
             }
-        else:  # Level C
+        elif level == "C":
             # Level C: design task
             objectives = schema_data.get("objectives", [])
             constraints = schema_data.get("constraints", [])
@@ -270,6 +272,72 @@ Constraints:
                 "constraints": constraints,
                 "design_variables": schema_data.get("design_variables", {}),
                 "type": "design",
+            }
+        elif level == "D":
+            # Level D: multi-step design task
+            title = schema_data.get("title", schema_data.get("topic", ""))
+            description = schema_data.get("description", "")
+            objectives = schema_data.get("objectives", [])
+            constraints = schema_data.get("constraints", {})
+            steps = schema_data.get("steps", [])
+            given = schema_data.get("given", {})
+
+            # Format step-by-step instructions
+            steps_text = ""
+            for i, step in enumerate(steps, 1):
+                step_name = step.get("name", f"Step {i}")
+                step_desc = step.get("description", "")
+                steps_text += f"\n\nStep {i}: {step_name}\n{step_desc}"
+                if step.get("design_variables"):
+                    steps_text += "\nDesign variables for this step:"
+                    for var_name, var_info in step["design_variables"].items():
+                        steps_text += f"\n  - {var_name}: {var_info}"
+                if step.get("requires_code"):
+                    steps_text += "\n  [Requires code execution]"
+
+            # Format constraints
+            constraints_text = ""
+            if isinstance(constraints, dict):
+                for key, value in constraints.items():
+                    constraints_text += f"\n- {key}: {value}"
+            elif isinstance(constraints, list):
+                constraints_text = "\n".join(f"- {con}" for con in constraints)
+
+            problem_text = f"""
+Multi-Step Design Task: {title}
+
+Description:
+{description}
+
+Given Parameters:
+{json.dumps(given, indent=2)}
+
+Objectives:
+{chr(10).join(f"- {obj}" for obj in objectives)}
+
+System-Level Constraints:
+{constraints_text}
+
+Task Steps:{steps_text}
+
+You must complete all steps and provide a final design solution.
+"""
+            return {
+                "problem_text": problem_text,
+                "level": "D",
+                "objectives": objectives,
+                "constraints": constraints,
+                "steps": steps,
+                "given": given,
+                "expected_output_schema": schema_data.get("expected_output_schema", {}),
+                "type": "multi_step_design",
+            }
+        else:
+            # Fallback for unknown levels
+            return {
+                "problem_text": f"Task level {level}",
+                "level": level,
+                "type": "unknown",
             }
 
     def step(self, action) -> StepResult:
@@ -342,12 +410,55 @@ Constraints:
                                     "\n\nPlease provide the numerical answer."
                                 )
                 elif task_type == "design":
-                    # Level C task - just mark as done, will be evaluated by LLM judge
-                    if any(
+                    # Level C task - mark as done if response contains design information
+                    # Check for design parameters, dimensions, or completion keywords
+                    has_design_keywords = any(
                         word in response_content.lower()
-                        for word in ["design", "solution", "complete", "answer"]
-                    ):
+                        for word in [
+                            "design",
+                            "solution",
+                            "complete",
+                            "answer",
+                            "optimized",
+                            "dimensions",
+                            "configuration",
+                        ]
+                    )
+                    # Check for design parameters (width, height, length, frequency, etc.)
+                    has_design_params = any(
+                        pattern in response_content.lower()
+                        for pattern in [
+                            "width",
+                            "height",
+                            "length",
+                            "frequency",
+                            "=",
+                            "dimensions",
+                        ]
+                    )
+                    if has_design_keywords or has_design_params:
                         done = True
+                        self.solved = True
+                        observation += "\n\nResponse received. Will be evaluated."
+                elif task_type == "multi_step_design":
+                    # Level D task - mark as done if response contains multi-component design information
+                    has_multi_component_keywords = any(
+                        word in response_content.lower()
+                        for word in [
+                            "design",
+                            "solution",
+                            "complete",
+                            "span",
+                            "component",
+                            "system",
+                            "metrics",
+                        ]
+                    )
+                    # Check for JSON block (Level D should also use JSON format)
+                    has_json = "```json" in response_content.lower()
+                    if has_multi_component_keywords or has_json:
+                        done = True
+                        self.solved = True
                         observation += "\n\nResponse received. Will be evaluated."
                 else:
                     # Legacy task format
@@ -415,7 +526,7 @@ Constraints:
             # Execute Python code using SandboxExecutor
             code = action.kwargs.get("code", "")
             try:
-                # Use SandboxExecutor which has better result detection
+                # Use SandboxExecutor which now maintains persistent state across calls
                 exec_result = self.sandbox.execute(code)
                 result = None
 

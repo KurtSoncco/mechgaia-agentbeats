@@ -21,11 +21,53 @@ class BenchmarkDatabase:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        # Tasks table
+        # Check if tasks table exists and if it needs migration for Level D support
+        cursor.execute("""
+            SELECT sql FROM sqlite_master 
+            WHERE type='table' AND name='tasks'
+        """)
+        schema_result = cursor.fetchone()
+
+        if schema_result:
+            schema_sql = schema_result[0]
+            # Check if old constraint exists (only allows A, B, C)
+            if schema_sql and "CHECK(level IN ('A', 'B', 'C'))" in schema_sql:
+                # Need to migrate - recreate table with new constraint
+                # Backup existing data
+                cursor.execute("SELECT * FROM tasks")
+                existing_tasks = cursor.fetchall()
+                if existing_tasks:
+                    column_names = [desc[0] for desc in cursor.description]
+
+                    # Drop old table
+                    cursor.execute("DROP TABLE tasks")
+                    conn.commit()
+
+                    # Create new table with updated constraint
+                    cursor.execute("""
+                        CREATE TABLE tasks (
+                            id TEXT PRIMARY KEY,
+                            level TEXT NOT NULL CHECK(level IN ('A', 'B', 'C', 'D')),
+                            topic TEXT NOT NULL,
+                            schema_type TEXT NOT NULL,
+                            schema_data TEXT NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """)
+
+                    # Restore data
+                    placeholders = ",".join(["?" for _ in column_names])
+                    cursor.executemany(
+                        f"INSERT INTO tasks ({','.join(column_names)}) VALUES ({placeholders})",
+                        existing_tasks,
+                    )
+                    conn.commit()
+
+        # Tasks table (create if doesn't exist)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS tasks (
                 id TEXT PRIMARY KEY,
-                level TEXT NOT NULL CHECK(level IN ('A', 'B', 'C')),
+                level TEXT NOT NULL CHECK(level IN ('A', 'B', 'C', 'D')),
                 topic TEXT NOT NULL,
                 schema_type TEXT NOT NULL,
                 schema_data TEXT NOT NULL,

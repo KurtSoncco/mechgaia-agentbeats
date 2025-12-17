@@ -375,6 +375,98 @@ Respond in JSON:
                 "overall_score": 0.5,
             }
 
+    def evaluate_level_d(
+        self, task_schema: Dict[str, Any], response: Dict[str, Any]
+    ) -> Dict[str, float]:
+        """Evaluate Level D multi-step design task response."""
+        design = response.get("design", {})
+        system_metrics = response.get("system_metrics", {})
+        rationale = response.get("rationale", "")
+        code_snippet = response.get("code", "")
+        steps = task_schema.get("steps", [])
+
+        prompt = f"""You are evaluating a mechanical engineering multi-step design task response using a detailed rubric.
+
+Task: {task_schema.get("title", task_schema.get("topic", ""))}
+Description: {task_schema.get("description", "")}
+Objectives: {json.dumps(task_schema.get("objectives", []), indent=2)}
+Constraints: {json.dumps(task_schema.get("constraints", {}), indent=2)}
+Steps: {json.dumps([s.get("name", "") for s in steps], indent=2)}
+
+Design Response:
+- Design Parameters: {json.dumps(design, indent=2)}
+- System Metrics: {json.dumps(system_metrics, indent=2)}
+- Rationale: {rationale}
+- Code Snippet: {code_snippet[:500] if code_snippet else "None"}
+
+Evaluation Rubric (score 1-5 for each):
+1. Technical Accuracy:
+   - Does the design correctly handle multi-component interactions?
+   - Are engineering formulas applied correctly for each step?
+   - Are calculations sound across all components?
+   - Does it properly account for system-level effects (e.g., continuity conditions, equivalent stiffness)?
+
+2. Multi-Step Coordination:
+   - Does the design address all required steps?
+   - Are decisions across steps consistent and coordinated?
+   - Does it properly integrate material selection, geometry, and system analysis?
+   - Are step dependencies handled correctly?
+
+3. System Constraint Awareness:
+   - Does the design address system-level constraints (deflection, stress, frequency, mass)?
+   - Are component-level constraints properly checked?
+   - Is the design feasible across all constraints?
+   - Are trade-offs between components considered?
+
+4. Engineering Judgment:
+   - Does it demonstrate good engineering principles for multi-component systems?
+   - Is the design practical and manufacturable?
+   - Are system-level trade-offs well-reasoned?
+   - Does the rationale explain multi-step decision-making?
+
+Respond in JSON:
+{{
+    "technical_accuracy": <score 1-5>,
+    "multi_step_coordination": <score 1-5>,
+    "system_constraint_awareness": <score 1-5>,
+    "engineering_judgment": <score 1-5>,
+    "overall_score": <score 1-5>
+}}
+"""
+
+        try:
+            response_llm = litellm.completion(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": self.system_instruction},
+                    {"role": "user", "content": prompt},
+                ],
+                response_format={"type": "json_object"},
+            )
+
+            scores_json = json.loads(response_llm.choices[0].message.content)
+
+            return {
+                "technical_accuracy": scores_json.get("technical_accuracy", 0) / 5.0,
+                "multi_step_coordination": scores_json.get("multi_step_coordination", 0)
+                / 5.0,
+                "system_constraint_awareness": scores_json.get(
+                    "system_constraint_awareness", 0
+                )
+                / 5.0,
+                "engineering_judgment": scores_json.get("engineering_judgment", 0)
+                / 5.0,
+                "overall_score": scores_json.get("overall_score", 0) / 5.0,
+            }
+        except Exception:
+            return {
+                "technical_accuracy": 0.5,
+                "multi_step_coordination": 0.5 if rationale else 0.0,
+                "system_constraint_awareness": 0.5 if system_metrics else 0.0,
+                "engineering_judgment": 0.5,
+                "overall_score": 0.5,
+            }
+
 
 class UnitTestGrader:
     """Unit test grader for quantitative evaluation."""

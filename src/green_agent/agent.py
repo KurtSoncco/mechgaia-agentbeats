@@ -71,14 +71,46 @@ You MUST respond in JSON format, wrapped with <json>...</json> tags.
 {{"name": "{RESPOND_ACTION_NAME}", "kwargs": {{"content": "After calculating using the tools, the answer is 4.0 Pa. The calculation was performed using the formula stress = force / area."}}}}
 </json>
 
-**IMPORTANT FOR CALCULATION PROBLEMS:**
+**IMPORTANT FOR CALCULATION PROBLEMS (Level B):**
 1. First, use calculator or python_exec to perform your calculations
 2. Wait for the tool result
 3. Then provide your final answer using the "respond" action
 4. Your final response MUST clearly state the numerical answer with units (e.g., "The answer is 123.45 Pa" or "Result: 123.45 Pa")
 5. Include both the numerical value AND units in your answer
 
-**JSON Structure:**
+**IMPORTANT FOR DESIGN PROBLEMS (Level C):**
+1. Use tools to perform calculations and evaluate design options
+2. After completing your analysis, you MUST output exactly one fenced code block tagged ```json
+3. The content of that block MUST be a single JSON object with keys: "design", "rationale", and "code"
+4. The "design" object should contain all design parameters (e.g., height_m, frequency_Hz, deflection_m, mass_kg, max_stress_MPa, safety_factor)
+5. Do not include any additional text before or after the ```json code block
+6. Example format:
+   ```json
+   {{
+     "design": {{"height_m": 0.25, "frequency_Hz": 38.5, ...}},
+     "rationale": "Your explanation here",
+     "code": "Your Python code here"
+   }}
+   ```
+
+**IMPORTANT FOR MULTI-STEP DESIGN PROBLEMS (Level D):**
+1. Use tools to perform calculations for each step (material selection, serviceability checks, system evaluation)
+2. After completing all steps, you MUST output exactly one fenced code block tagged ```json
+3. The content of that block MUST be a single JSON object with keys: "design", "system_metrics", "rationale", and "code"
+4. The "design" object should contain component-level design parameters (e.g., span_1: {{material, height_m}}, span_2: {{material, height_m}})
+5. The "system_metrics" object should contain system-level metrics (max_deflection_m, max_stress_span_1_MPa, max_stress_span_2_MPa, min_frequency_Hz, total_mass_kg)
+6. Do not include any additional text before or after the ```json code block
+7. Example format:
+   ```json
+   {{
+     "design": {{"span_1": {{"material": "Steel A", "height_m": 0.25}}, "span_2": {{"material": "Aluminum", "height_m": 0.30}}}},
+     "system_metrics": {{"max_deflection_m": 0.004, "max_stress_span_1_MPa": 120.5, ...}},
+     "rationale": "Your multi-step explanation here",
+     "code": "Your Python code here"
+   }}
+   ```
+
+**JSON Structure (for tool calls):**
 - "name": the tool call function name (calculator, python_exec, get_material_properties), or "{RESPOND_ACTION_NAME}" for final answers
 - "kwargs": the arguments for the tool call, or {{"content": "your message here"}} for final answers
 
@@ -131,52 +163,181 @@ User message: {obs}
 
         # Handle case where white agent doesn't provide JSON tags
         should_break = False
+        parse_failed = False  # Track if parsing actually failed vs successfully handled as final response
         if "json" not in white_tags:
-            print(
-                f"@@@ Warning: White agent response missing JSON tags. Response: {white_text[:200]}..."
-            )
-            # Try to extract JSON from the response text directly
+            # Check if this might be a Level C or D final response with ```json code block
             import re
 
-            json_match = re.search(r'\{[^{}]*"name"[^{}]*\}', white_text, re.DOTALL)
-            if json_match:
-                try:
-                    action_dict = json.loads(json_match.group(0))
-                    action = Action(**action_dict)
-                except (json.JSONDecodeError, ValueError) as e:
-                    print(f"@@@ Error parsing JSON from response: {e}")
-                    # If we can't parse, treat as a respond action
-                    action = Action(
-                        name=RESPOND_ACTION_NAME,
-                        kwargs={
-                            "content": white_text[:1000]
-                        },  # Use the actual response text
-                    )
-                    should_break = (
-                        True  # Break after this step to prevent infinite retries
-                    )
-            else:
-                # No JSON found - treat as a respond action
-                print("@@@ No JSON found in response. Treating as final response.")
+            json_code_block_match = re.search(
+                r"```json\s*\n(.*?)```", white_text, re.DOTALL
+            )
+
+            if json_code_block_match:
+                # Found ```json code block - this is likely a Level C or D final response
+                # Extract it and treat as respond action with the full response
+                print(
+                    "@@@ Found JSON code block in response (Level C/D format). Treating as final response."
+                )
                 action = Action(
                     name=RESPOND_ACTION_NAME,
                     kwargs={
-                        "content": white_text[:1000]
-                    },  # Use the actual response text
+                        "content": white_text  # Use full response including JSON block
+                    },
                 )
-                should_break = True  # Break after this step
+                should_break = True  # Break after this step (successfully handled)
+                parse_failed = False  # This is successful handling, not a failure
+            else:
+                # Try to extract JSON from the response text directly (for tool calls)
+                print(
+                    f"@@@ Warning: White agent response missing JSON tags. Response: {white_text[:200]}..."
+                )
+                json_match = re.search(r'\{[^{}]*"name"[^{}]*\}', white_text, re.DOTALL)
+                if json_match:
+                    try:
+                        action_dict = json.loads(json_match.group(0))
+                        action = Action(**action_dict)
+                        # Successfully parsed - don't break, continue conversation
+                    except (json.JSONDecodeError, ValueError) as e:
+                        print(f"@@@ Error parsing JSON from response: {e}")
+                        # If we can't parse, treat as a respond action
+                        action = Action(
+                            name=RESPOND_ACTION_NAME,
+                            kwargs={
+                                "content": white_text  # Use full response text, not truncated
+                            },
+                        )
+                        should_break = (
+                            True  # Break after this step to prevent infinite retries
+                        )
+                        parse_failed = True  # This is a parsing failure
+                else:
+                    # No JSON found - treat as a respond action
+                    print("@@@ No JSON found in response. Treating as final response.")
+                    action = Action(
+                        name=RESPOND_ACTION_NAME,
+                        kwargs={
+                            "content": white_text  # Use full response text, not truncated
+                        },
+                    )
+                    should_break = True  # Break after this step (successfully handled)
+                    parse_failed = False  # This is successful handling, not a failure
         else:
             action_json = white_tags["json"]
             try:
+                # Try to parse JSON - handle cases where there's extra text after JSON
+                # First try direct parsing
                 action_dict = json.loads(action_json)
+                # Validate structure before creating Action
+                if (
+                    not isinstance(action_dict, dict)
+                    or "name" not in action_dict
+                    or "kwargs" not in action_dict
+                ):
+                    raise ValueError(
+                        f"Invalid action structure: missing 'name' or 'kwargs'. Got keys: {list(action_dict.keys()) if isinstance(action_dict, dict) else 'not a dict'}"
+                    )
                 action = Action(**action_dict)
-            except (json.JSONDecodeError, ValueError) as e:
+            except json.JSONDecodeError as e:
+                # JSON parsing failed - try to extract just the JSON object
                 print(f"@@@ Error parsing JSON from tags: {e}")
-                # Fallback to respond action
+                print(
+                    f"@@@ Attempting to extract JSON object from: {action_json[:200]}..."
+                )
+
+                # Try multiple strategies to extract valid JSON
+                import re
+
+                action_dict = None
+
+                # Strategy 1: Try to find the first complete JSON object by matching braces
+                # This handles cases where there's extra text after the JSON
+                brace_count = 0
+                start_idx = -1
+                for i, char in enumerate(action_json):
+                    if char == "{":
+                        if start_idx == -1:
+                            start_idx = i
+                        brace_count += 1
+                    elif char == "}":
+                        brace_count -= 1
+                        if brace_count == 0 and start_idx != -1:
+                            # Found complete JSON object
+                            try:
+                                extracted_json = action_json[start_idx : i + 1]
+                                action_dict = json.loads(extracted_json)
+                                # Validate it has the required structure
+                                if (
+                                    isinstance(action_dict, dict)
+                                    and "name" in action_dict
+                                    and "kwargs" in action_dict
+                                ):
+                                    print(
+                                        "@@@ Successfully extracted complete JSON object using brace matching"
+                                    )
+                                    break
+                                else:
+                                    action_dict = (
+                                        None  # Invalid structure, try next strategy
+                                    )
+                            except json.JSONDecodeError:
+                                action_dict = None  # Invalid JSON, try next strategy
+                            start_idx = -1
+                            brace_count = 0
+
+                # Strategy 2: If brace matching failed, try regex (but validate structure)
+                if action_dict is None:
+                    json_obj_match = re.search(
+                        r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", action_json, re.DOTALL
+                    )
+                    if json_obj_match:
+                        try:
+                            extracted_json = json_obj_match.group(0)
+                            potential_dict = json.loads(extracted_json)
+                            # Validate it has the required structure (name and kwargs)
+                            if (
+                                isinstance(potential_dict, dict)
+                                and "name" in potential_dict
+                                and "kwargs" in potential_dict
+                            ):
+                                action_dict = potential_dict
+                                print(
+                                    "@@@ Successfully extracted JSON object using regex"
+                                )
+                            else:
+                                print(
+                                    f"@@@ Extracted JSON missing required keys (name/kwargs): {list(potential_dict.keys()) if isinstance(potential_dict, dict) else 'not a dict'}"
+                                )
+                        except (json.JSONDecodeError, ValueError) as e2:
+                            print(f"@@@ Failed to parse extracted JSON: {e2}")
+
+                if action_dict:
+                    try:
+                        action = Action(**action_dict)
+                        print("@@@ Successfully created Action from extracted JSON")
+                    except (ValueError, TypeError) as e2:
+                        print(f"@@@ Failed to create Action: {e2}")
+                        # Fallback: treat as respond action with full text
+                        action = Action(
+                            name=RESPOND_ACTION_NAME, kwargs={"content": white_text}
+                        )
+                        should_break = True
+                        parse_failed = True
+                else:
+                    # No valid JSON object found - treat as respond action with full text
+                    print("@@@ No valid JSON object found in extracted content")
+                    action = Action(
+                        name=RESPOND_ACTION_NAME, kwargs={"content": white_text}
+                    )
+                    should_break = True
+                    parse_failed = True  # This is a parsing failure
+            except (ValueError, TypeError) as e:
+                print(f"@@@ Error creating Action from parsed JSON: {e}")
+                # Fallback: treat as respond action with full text
                 action = Action(
-                    name=RESPOND_ACTION_NAME, kwargs={"content": white_text[:1000]}
+                    name=RESPOND_ACTION_NAME, kwargs={"content": white_text}
                 )
                 should_break = True
+                parse_failed = True  # This is a parsing failure
 
         env_response = env.step(action)
         reward = env_response.reward
@@ -229,10 +390,14 @@ User message: {obs}
 
         # Stop if task is done or if we couldn't parse the response - don't send more messages
         if env_response.done or should_break:
-            if should_break:
+            if should_break and parse_failed:
+                # Actually failed to parse - show error message
                 print(
                     "@@@ Could not parse white agent response. Stopping conversation."
                 )
+            elif should_break:
+                # Successfully handled as final response (e.g., found JSON code block)
+                print("@@@ Response handled as final answer. Stopping conversation.")
             else:
                 print("@@@ Task marked as done. Stopping conversation.")
             break
@@ -301,6 +466,46 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
                     if instances:
                         # Add all instances for each task, not just the first one
                         instances_to_evaluate.extend([inst["id"] for inst in instances])
+
+            # For testing: Limit Level C and D to 2 instances each
+            if "C" in levels or "D" in levels:
+                # Get instance levels from database for proper subsampling
+                all_instances_data = self.db.get_task_instances()
+                instance_level_map = {
+                    inst["id"]: inst["level"] for inst in all_instances_data
+                }
+
+                # Separate instances by level
+                c_instances = [
+                    inst
+                    for inst in instances_to_evaluate
+                    if instance_level_map.get(inst) == "C"
+                ]
+                d_instances = [
+                    inst
+                    for inst in instances_to_evaluate
+                    if instance_level_map.get(inst) == "D"
+                ]
+                other_instances = [
+                    inst
+                    for inst in instances_to_evaluate
+                    if inst not in c_instances + d_instances
+                ]
+
+                # Limit C and D instances
+                if "C" in levels and len(c_instances) > 2:
+                    print(
+                        f"  Limiting Level C evaluation to 2 instances for testing (found {len(c_instances)} total)"
+                    )
+                    c_instances = c_instances[:2]
+                if "D" in levels and len(d_instances) > 2:
+                    print(
+                        f"  Limiting Level D evaluation to 2 instances for testing (found {len(d_instances)} total)"
+                    )
+                    d_instances = d_instances[:2]
+
+                instances_to_evaluate = c_instances + d_instances + other_instances
+
             print(f"  Total instances to evaluate: {len(instances_to_evaluate)}")
         elif level:
             # Get all instances for a single level - evaluate ALL tasks
@@ -311,6 +516,18 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
                 if instances:
                     # Add all instances for each task, not just the first one
                     instances_to_evaluate.extend([inst["id"] for inst in instances])
+
+            # For testing: Limit Level C and D to 2 instances
+            if level == "C" and len(instances_to_evaluate) > 2:
+                print(
+                    f"  Limiting Level C evaluation to 2 instances for testing (found {len(instances_to_evaluate)} total)"
+                )
+                instances_to_evaluate = instances_to_evaluate[:2]
+            elif level == "D" and len(instances_to_evaluate) > 2:
+                print(
+                    f"  Limiting Level D evaluation to 2 instances for testing (found {len(instances_to_evaluate)} total)"
+                )
+                instances_to_evaluate = instances_to_evaluate[:2]
         elif task_ids:
             # Try to find instances in database first
             instances_to_evaluate = []
@@ -318,6 +535,7 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
                 self.db.get_tasks_by_level("A")
                 + self.db.get_tasks_by_level("B")
                 + self.db.get_tasks_by_level("C")
+                + self.db.get_tasks_by_level("D")
             )
 
             for task_id in task_ids:
@@ -421,8 +639,14 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
                 elif instance["level"] == "B":
                     task_type = "calculation"
                     num_options = 0
-                else:  # Level C
+                elif instance["level"] == "C":
                     task_type = "design"
+                    num_options = 0
+                elif instance["level"] == "D":
+                    task_type = "multi_step_design"
+                    num_options = 0
+                else:
+                    task_type = "unknown"
                     num_options = 0
 
                 # Get the response text from the result info
@@ -475,9 +699,23 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
 
                 # Parse the response
                 response = parse_response(response_text, task_type, num_options)
-                print(
-                    f"@@@ Parsed response: selected_option={response.get('selected_option')}, answer={response.get('answer')}"
-                )
+                if instance["level"] == "C":
+                    # For Level C, log design parameters
+                    design = response.get("design", {})
+                    print(
+                        f"@@@ Parsed response: design={design}, rationale_length={len(response.get('rationale', ''))}, has_code={bool(response.get('code'))}"
+                    )
+                elif instance["level"] == "D":
+                    # For Level D, log multi-component design parameters
+                    design = response.get("design", {})
+                    system_metrics = response.get("system_metrics", {})
+                    print(
+                        f"@@@ Parsed response: design={design}, system_metrics={system_metrics}, rationale_length={len(response.get('rationale', ''))}, has_code={bool(response.get('code'))}"
+                    )
+                else:
+                    print(
+                        f"@@@ Parsed response: selected_option={response.get('selected_option')}, answer={response.get('answer')}"
+                    )
 
                 try:
                     if instance["level"] == "A":
@@ -506,10 +744,75 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
 
                         # Combine both evaluations
                         scores = {**unit_test_scores, **mej_scores}
-                    else:  # Level C
+                    elif instance["level"] == "C":
                         print("@@@ Evaluating Level C task with MEJ (LLM judge)...")
                         scores = self.llm_judge.evaluate_level_c(schema_data, response)
                         print(f"@@@ MEJ scores: {scores}")
+
+                        # Calculate criteria breakdown for Level C
+                        criteria_threshold = 0.6  # Threshold for "passing" a criterion
+                        criteria_names = [
+                            "technical_accuracy",
+                            "safety_constraint_awareness",
+                            "reasoning_quality",
+                            "engineering_judgment",
+                        ]
+                        passed_criteria = [
+                            name
+                            for name in criteria_names
+                            if scores.get(name, 0) >= criteria_threshold
+                        ]
+                        criteria_percentage = (
+                            len(passed_criteria) / len(criteria_names)
+                        ) * 100
+
+                        print("@@@ Level C Criteria Breakdown:")
+                        for name in criteria_names:
+                            score = scores.get(name, 0)
+                            status = (
+                                "✓ PASS" if score >= criteria_threshold else "✗ FAIL"
+                            )
+                            print(f"  - {name}: {score:.2f} ({status})")
+                        print(
+                            f"@@@ Criteria Met: {len(passed_criteria)}/{len(criteria_names)} ({criteria_percentage:.1f}%)"
+                        )
+                    elif instance["level"] == "D":
+                        print("@@@ Evaluating Level D task with MEJ (LLM judge)...")
+                        scores = self.llm_judge.evaluate_level_d(schema_data, response)
+                        print(f"@@@ MEJ scores: {scores}")
+
+                        # Calculate criteria breakdown for Level D
+                        criteria_threshold = 0.6  # Threshold for "passing" a criterion
+                        criteria_names = [
+                            "technical_accuracy",
+                            "multi_step_coordination",
+                            "system_constraint_awareness",
+                            "engineering_judgment",
+                        ]
+                        passed_criteria = [
+                            name
+                            for name in criteria_names
+                            if scores.get(name, 0) >= criteria_threshold
+                        ]
+                        criteria_percentage = (
+                            len(passed_criteria) / len(criteria_names)
+                        ) * 100
+
+                        print("@@@ Level D Criteria Breakdown:")
+                        for name in criteria_names:
+                            score = scores.get(name, 0)
+                            status = (
+                                "✓ PASS" if score >= criteria_threshold else "✗ FAIL"
+                            )
+                            print(f"  - {name}: {score:.2f} ({status})")
+                        print(
+                            f"@@@ Criteria Met: {len(passed_criteria)}/{len(criteria_names)} ({criteria_percentage:.1f}%)"
+                        )
+                    else:
+                        print(
+                            f"@@@ Unknown level: {instance['level']}, skipping evaluation"
+                        )
+                        scores = {"error": f"Unknown level: {instance['level']}"}
                 except Exception as e:
                     print(f"@@@ Error during evaluation: {e}")
                     import traceback
@@ -565,12 +868,49 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
                         f"MEJ_overall={mej_overall:.2f}, quantitative_pass={quantitative_pass}, "
                         f"qualitative_pass={qualitative_pass}, partial_credit={partial_credit}, success={success}"
                     )
-                else:  # Level C
+                elif instance["level"] == "C":
                     overall_score = scores.get("overall_score", 0)
-                    success = overall_score > 0.7
-                    print(
-                        f"@@@ Level C evaluation: overall_score={overall_score:.2f}, success={success}"
+                    # Success if overall_score > 0.7 OR all criteria pass (>= 0.6)
+                    criteria_threshold = 0.6
+                    criteria_names = [
+                        "technical_accuracy",
+                        "safety_constraint_awareness",
+                        "reasoning_quality",
+                        "engineering_judgment",
+                    ]
+                    all_criteria_pass = all(
+                        scores.get(name, 0) >= criteria_threshold
+                        for name in criteria_names
                     )
+                    success = overall_score > 0.7 or (
+                        overall_score >= 0.6 and all_criteria_pass
+                    )
+                    print(
+                        f"@@@ Level C evaluation: overall_score={overall_score:.2f}, all_criteria_pass={all_criteria_pass}, success={success}"
+                    )
+                elif instance["level"] == "D":
+                    overall_score = scores.get("overall_score", 0)
+                    # Success if overall_score > 0.7 OR all criteria pass (>= 0.6)
+                    criteria_threshold = 0.6
+                    criteria_names = [
+                        "technical_accuracy",
+                        "multi_step_coordination",
+                        "system_constraint_awareness",
+                        "engineering_judgment",
+                    ]
+                    all_criteria_pass = all(
+                        scores.get(name, 0) >= criteria_threshold
+                        for name in criteria_names
+                    )
+                    success = overall_score > 0.7 or (
+                        overall_score >= 0.6 and all_criteria_pass
+                    )
+                    print(
+                        f"@@@ Level D evaluation: overall_score={overall_score:.2f}, all_criteria_pass={all_criteria_pass}, success={success}"
+                    )
+                else:
+                    print(f"@@@ Unknown level: {instance['level']}, marking as failed")
+                    success = False
 
                 all_results.append(
                     {

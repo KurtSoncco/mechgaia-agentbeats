@@ -1,10 +1,11 @@
-"""Task generator for MechGAIA benchmark levels A, B, and C."""
+"""Task generator for MechGAIA benchmark levels A, B, C, and D."""
 
 import json
 import random
+from pathlib import Path
 
 from src.mechgaia_env.database import BenchmarkDatabase
-from src.mechgaia_env.schemas import LevelATask, LevelBTask, LevelCTask
+from src.mechgaia_env.schemas import LevelATask, LevelBTask, LevelCTask, LevelDTask
 
 
 class TaskGenerator:
@@ -270,13 +271,67 @@ class TaskGenerator:
                 schema_data=task.model_dump(),
             )
 
+    def generate_level_d_tasks(self, examples_dir: str | Path | None = None):
+        """Generate Level D tasks by loading from JSON example files.
+
+        Args:
+            examples_dir: Directory containing Level D example JSON files.
+                         Defaults to data/level_d/examples relative to project root.
+        """
+        if examples_dir is None:
+            # Default to data/level_d/examples relative to project root
+            project_root = Path(__file__).parent.parent.parent
+            examples_dir = project_root / "data" / "level_d" / "examples"
+        else:
+            examples_dir = Path(examples_dir)
+
+        if not examples_dir.exists():
+            print(f"Warning: Level D examples directory not found: {examples_dir}")
+            return []
+
+        # Find all JSON files in examples directory
+        json_files = list(examples_dir.glob("*.json"))
+
+        loaded_tasks = []
+        for json_file in json_files:
+            try:
+                with open(json_file) as f:
+                    task_data = json.load(f)
+
+                # Validate it's a Level D task
+                if task_data.get("level") != "D":
+                    print(f"Warning: Skipping {json_file.name} - not a Level D task")
+                    continue
+
+                # Create LevelDTask schema object
+                task = LevelDTask(**task_data)
+
+                # Store in database
+                self.db.add_task(
+                    task_id=task_data["id"],
+                    level="D",
+                    topic=task_data.get("title", task_data.get("type", "")),
+                    schema_type="LevelDTask",
+                    schema_data=task.model_dump(),
+                )
+
+                loaded_tasks.append(task_data["id"])
+                print(f"Loaded Level D task: {task_data['id']}")
+
+            except Exception as e:
+                print(f"Error loading Level D task from {json_file.name}: {e}")
+                continue
+
+        return loaded_tasks
+
     def generate_task_instances(self, task_id: str, num_instances: int = 10):
         """Generate multiple instances of a task with different parameters."""
         # Get task from database
         tasks_a = self.db.get_tasks_by_level("A")
         tasks_b = self.db.get_tasks_by_level("B")
         tasks_c = self.db.get_tasks_by_level("C")
-        all_tasks = tasks_a + tasks_b + tasks_c
+        tasks_d = self.db.get_tasks_by_level("D")
+        all_tasks = tasks_a + tasks_b + tasks_c + tasks_d
 
         task = next((t for t in all_tasks if t["id"] == task_id), None)
 
@@ -326,8 +381,8 @@ class TaskGenerator:
                         "solution": 0.0,
                         "tolerance": schema_data["tolerance"],
                     }
-            else:  # Level C
-                # Sample design variables
+            elif level == "C":
+                # Level C: Sample design variables
                 parameters = {}
                 for var, var_info in schema_data["design_variables"].items():
                     if var_info["type"] == "continuous":
@@ -341,6 +396,17 @@ class TaskGenerator:
                     "reference_design": schema_data["reference_design"],
                     "evaluation_required": True,
                 }
+            elif level == "D":
+                # Level D: multi-step design task
+                # For Level D, we can optionally vary parameters from the given values
+                # For now, use empty parameters (Level D tasks are typically loaded from JSON with fixed parameters)
+                parameters = {}
+                gold_answer = {
+                    "evaluation_required": True,
+                    "multi_step": True,
+                }
+            else:
+                raise ValueError(f"Unknown level: {level}")
 
             self.db.add_task_instance(
                 instance_id=instance_id,

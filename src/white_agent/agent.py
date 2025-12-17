@@ -68,7 +68,65 @@ IMPORTANT INSTRUCTIONS:
    - Clearly state which option you select (e.g., "Option 1" or "The correct answer is Option 2")
    - Provide reasoning for your choice
 
-5. **Always**: 
+5. **For Design Problems (Level C)**:
+   - Use tools to perform calculations and evaluate design options
+   - After completing your analysis, you MUST output exactly one fenced code block tagged ```json
+   - The content of that block MUST be a single JSON object with the following structure:
+     {
+       "design": {
+         "height_m": <float>,
+         "frequency_Hz": <float>,
+         "deflection_m": <float>,
+         "mass_kg": <float>,
+         "max_stress_MPa": <float>,
+         "safety_factor": <float>
+       },
+       "rationale": "<string: 2-6 sentences explaining key trade-offs and whether constraints are met>",
+       "code": "<string: valid Python code that recomputes the design metrics from first principles>"
+     }
+   - Do not include any additional text before or after the ```json code block
+   - Do not wrap the JSON in markdown list items or quotes
+   - If you conclude that no feasible design exists within the specified variable bounds and material properties, still output the JSON object, but set "design" to your best attempt and clearly state in "rationale" that the constraints are mutually incompatible
+   
+   **Example Output Format (for reference - use different numbers in your actual response):**
+   ```json
+   {
+     "design": {
+       "height_m": 0.18,
+       "frequency_Hz": 42.3,
+       "deflection_m": 0.0015,
+       "mass_kg": 3.2,
+       "max_stress_MPa": 65.8,
+       "safety_factor": 3.8
+     },
+     "rationale": "Selected height of 0.18 m to balance frequency and mass constraints. The design meets deflection and stress requirements but falls slightly short of the 50 Hz frequency target due to material limitations.",
+     "code": "import math\nL = 1.0\nb = 0.05\nh = 0.18\nE = 210e9\nrho = 7850.0\nP = 100.0\nA = b * h\nm = rho * A * L\nI = b * h**3 / 12\nDelta = P * L**3 / (3 * E * I)\nM_max = P * L\nc = h / 2.0\nsigma = M_max * c / I\nsigma_MPa = sigma / 1e6\nsigma_y = 250.0\nSF = sigma_y / sigma_MPa\nf = (1.875**2 / (2 * math.pi * L**2)) * math.sqrt(E * I / (rho * A))\nprint({'height_m': h, 'frequency_Hz': f, 'deflection_m': Delta, 'mass_kg': m, 'max_stress_MPa': sigma_MPa, 'safety_factor': SF})"
+   }
+   ```
+
+6. **For Multi-Step Design Problems (Level D)**:
+   - Use tools to perform calculations for each step (material selection, serviceability checks, system evaluation)
+   - After completing all steps, you MUST output exactly one fenced code block tagged ```json
+   - The content of that block MUST be a single JSON object with the following structure:
+     {
+       "design": {
+         "span_1": {"material": "<string>", "height_m": <float>},
+         "span_2": {"material": "<string>", "height_m": <float>}
+       },
+       "system_metrics": {
+         "max_deflection_m": <float>,
+         "max_stress_span_1_MPa": <float>,
+         "max_stress_span_2_MPa": <float>,
+         "min_frequency_Hz": <float>,
+         "total_mass_kg": <float>
+       },
+       "rationale": "<string: 2-6 sentences explaining multi-step decisions and system-level trade-offs>",
+       "code": "<string: valid Python code that computes system metrics from first principles>"
+     }
+   - Do not include any additional text before or after the ```json code block
+   - Ensure your design addresses all steps and system-level constraints
+
+7. **Always**: 
    - Use tools to verify your calculations
    - Provide clear, well-formatted responses
    - Include units in numerical answers

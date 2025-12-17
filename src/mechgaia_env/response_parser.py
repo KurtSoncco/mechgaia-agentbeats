@@ -1,5 +1,6 @@
 """Response parsing utilities for extracting answers from agent responses."""
 
+import json
 import re
 from typing import Any, Dict, Optional
 
@@ -150,6 +151,125 @@ def extract_code_snippet(response_text: str) -> Optional[str]:
     return None
 
 
+def extract_json_from_response(response_text: str) -> Optional[Dict[str, Any]]:
+    """Extract JSON object from response text, looking for the last ```json code block.
+
+    Args:
+        response_text: The response text from the agent
+
+    Returns:
+        Parsed JSON dictionary or None if not found
+    """
+    # Look for JSON code blocks - find the LAST one (most likely to be the final output)
+    json_block_pattern = r"```json\s*\n(.*?)```"
+    matches = re.findall(json_block_pattern, response_text, re.DOTALL)
+
+    if matches:
+        # Use the last match (most likely to be the final output)
+        json_str = matches[-1].strip()
+        try:
+            json_obj = json.loads(json_str)
+            return json_obj
+        except json.JSONDecodeError:
+            # Try to handle common issues like trailing commas or comments
+            # Remove trailing commas before closing braces/brackets
+            json_str = re.sub(r",\s*}", "}", json_str)
+            json_str = re.sub(r",\s*]", "]", json_str)
+            try:
+                json_obj = json.loads(json_str)
+                return json_obj
+            except json.JSONDecodeError:
+                return None
+
+    # Also try to find JSON objects not in code blocks (less common but possible)
+    # Look for JSON-like structures: { ... } that might contain "design", "rationale", "code"
+    json_like_pattern = r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}"
+    potential_json_matches = re.findall(json_like_pattern, response_text, re.DOTALL)
+
+    for match in reversed(potential_json_matches):  # Try last first
+        try:
+            json_obj = json.loads(match)
+            # Check if it looks like a Level C response (has design, rationale, or code keys)
+            if isinstance(json_obj, dict) and any(
+                key in json_obj for key in ["design", "rationale", "code"]
+            ):
+                return json_obj
+        except json.JSONDecodeError:
+            continue
+
+    return None
+
+
+def extract_design_parameters(response_text: str) -> Dict[str, Any]:
+    """Extract design parameters from response text.
+
+    Looks for patterns like "width = 0.1 m", "height = 0.3 m", etc.
+
+    Args:
+        response_text: The response text from the agent
+
+    Returns:
+        Dictionary with design parameters
+    """
+    design = {}
+
+    # Pattern 1: "parameter = value unit" or "parameter = value"
+    # Examples: "width = 0.1 m", "height = 0.3 m", "length = 1.5 m"
+    param_pattern = (
+        r"(\w+)\s*=\s*([-+]?\d+\.?\d*(?:[eE][-+]?\d+)?)\s*(?:m|mm|cm|kg|g|pa|mpa|hz)?"
+    )
+    matches = re.findall(param_pattern, response_text, re.IGNORECASE)
+
+    for param_name, param_value in matches:
+        try:
+            value = float(param_value)
+            design[param_name.lower()] = value
+        except ValueError:
+            pass
+
+    # Pattern 2: "parameter of value unit" or "parameter is value unit"
+    # Examples: "height of 0.25 m", "length of 1.5 m", "width is 0.1 m"
+    param_of_pattern = r"(\w+)\s+(?:of|is)\s+([-+]?\d+\.?\d*(?:[eE][-+]?\d+)?)\s*(?:m|mm|cm|kg|g|pa|mpa|hz)?"
+    matches = re.findall(param_of_pattern, response_text, re.IGNORECASE)
+
+    for param_name, param_value in matches:
+        try:
+            value = float(param_value)
+            param_key = param_name.lower()
+            # Only add if not already found
+            if param_key not in design:
+                design[param_key] = value
+        except ValueError:
+            pass
+
+    # Pattern 3: "parameter: value" format
+    param_colon_pattern = r"(\w+)\s*:\s*([-+]?\d+\.?\d*(?:[eE][-+]?\d+)?)"
+    matches = re.findall(param_colon_pattern, response_text, re.IGNORECASE)
+
+    for param_name, param_value in matches:
+        try:
+            value = float(param_value)
+            param_key = param_name.lower()
+            # Only add if not already found
+            if param_key not in design:
+                design[param_key] = value
+        except ValueError:
+            pass
+
+    # Pattern 4: Look for common design parameters in natural language
+    # "natural frequency of X Hz" -> frequency: X
+    freq_pattern = r"(?:natural\s+)?frequency\s+(?:of|is|:)?\s*([-+]?\d+\.?\d*(?:[eE][-+]?\d+)?)\s*hz"
+    freq_matches = re.findall(freq_pattern, response_text, re.IGNORECASE)
+    if freq_matches:
+        try:
+            design["frequency"] = float(freq_matches[-1])
+            design["natural_frequency"] = float(freq_matches[-1])
+        except ValueError:
+            pass
+
+    return design
+
+
 def extract_answer_from_code_result(
     code_text: str, response_text: str
 ) -> Optional[float]:
@@ -248,12 +368,44 @@ def parse_response(
         parsed["explanation"] = response_text
 
     elif task_type == "design":
-        code = extract_code_snippet(response_text)
-        if code:
-            parsed["code"] = code
-        # Try to extract design parameters from text
-        # This is a simplified version - could be enhanced with structured parsing
-        parsed["rationale"] = response_text
-        parsed["design"] = {}  # Would need more sophisticated parsing
+        # First try to extract JSON from response (preferred method)
+        json_obj = extract_json_from_response(response_text)
+
+        if json_obj:
+            # JSON found - use structured data
+            parsed["design"] = json_obj.get("design", {})
+            parsed["rationale"] = json_obj.get("rationale", "")
+            parsed["code"] = json_obj.get("code", "")
+        else:
+            # Fallback to regex-based extraction
+            code = extract_code_snippet(response_text)
+            if code:
+                parsed["code"] = code
+            # Extract design parameters from text using regex patterns
+            design_params = extract_design_parameters(response_text)
+            parsed["design"] = design_params
+            parsed["rationale"] = response_text
+
+    elif task_type == "multi_step_design":
+        # Level D: multi-step design task
+        # First try to extract JSON from response (preferred method)
+        json_obj = extract_json_from_response(response_text)
+
+        if json_obj:
+            # JSON found - use structured data
+            parsed["design"] = json_obj.get("design", {})
+            parsed["system_metrics"] = json_obj.get("system_metrics", {})
+            parsed["rationale"] = json_obj.get("rationale", "")
+            parsed["code"] = json_obj.get("code", "")
+        else:
+            # Fallback to regex-based extraction
+            code = extract_code_snippet(response_text)
+            if code:
+                parsed["code"] = code
+            # Extract design parameters from text using regex patterns
+            design_params = extract_design_parameters(response_text)
+            parsed["design"] = design_params
+            parsed["system_metrics"] = {}  # Can't easily extract from text
+            parsed["rationale"] = response_text
 
     return parsed

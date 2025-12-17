@@ -63,12 +63,41 @@ class LevelCTask(BaseModel):
     )
 
 
+class LevelDTask(BaseModel):
+    """Level D task schema - multi-component / multi-step design tasks."""
+
+    id: str
+    level: str = Field(default="D", description="Task level")
+    type: str = Field(
+        description="Task type (e.g., 'multi_component_beam', 'frame', 'material_co_design')"
+    )
+    title: str = Field(description="Task title")
+    description: str = Field(description="Task description")
+    steps: List[Dict[str, Any]] = Field(
+        description="List of steps, each with name, description, design_variables, constraints, etc."
+    )
+    given: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Given parameters (geometry, loads, materials)",
+    )
+    constraints: Dict[str, Any] = Field(
+        default_factory=dict, description="System-level constraints"
+    )
+    objectives: List[str] = Field(default_factory=list, description="Design objectives")
+    expected_output_schema: Dict[str, Any] = Field(
+        description="Expected output schema with design, system_metrics, rationale, code"
+    )
+    material_options: List[Dict[str, Any]] = Field(
+        default_factory=list, description="Available material options with properties"
+    )
+
+
 class TaskInstance(BaseModel):
     """Instance of a task with specific parameters."""
 
     id: str
     task_id: str
-    level: str = Field(..., pattern="^[ABC]$")
+    level: str = Field(..., pattern="^[ABCD]$")
     parameters: Dict[str, Any] = Field(default_factory=dict)
     gold_answer: Dict[str, Any] = Field(default_factory=dict)
     metadata: Dict[str, Any] = Field(default_factory=dict)

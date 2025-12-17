@@ -54,7 +54,7 @@ def launch_remote(
     green_url: str = "http://localhost:9001",
     white_url: str = "http://localhost:9002",
     level: str = typer.Option(
-        None, "--level", "-l", help="Single task level (A, B, or C)"
+        None, "--level", "-l", help="Single task level (A, B, C, or D)"
     ),
     levels: str = typer.Option(
         None, "--levels", help="Comma-separated levels (e.g., 'A,B,C')"

@@ -39,20 +39,27 @@ async def launch_evaluation():
     from src.mechgaia_env.database import BenchmarkDatabase
 
     db = BenchmarkDatabase()
-    level_b_tasks = db.get_tasks_by_level("B")
+    level_c_tasks = db.get_tasks_by_level("C")
+    level_d_tasks = db.get_tasks_by_level("D")
 
-    if level_b_tasks:
-        # Database has Level B tasks - evaluate only Level B
-        print(f"Found {len(level_b_tasks)} Level B tasks in database.")
-        print("Evaluating Level B tasks...")
+    if level_c_tasks or level_d_tasks:
+        # Database has tasks - evaluate available levels
+        levels_to_evaluate = []
+        if level_c_tasks:
+            print(f"Found {len(level_c_tasks)} Level C tasks in database.")
+            levels_to_evaluate.append("C")
+        if level_d_tasks:
+            print(f"Found {len(level_d_tasks)} Level D tasks in database.")
+            levels_to_evaluate.append("D")
+
+        print(f"Evaluating Level {', '.join(levels_to_evaluate)} tasks...")
         task_config = {
             "env": "mechgaia",
             "user_strategy": "llm",
             "user_model": "openai/gpt-4o",
             "user_provider": "openai",
             "task_split": "test",
-            # Evaluate only Level B
-            "levels": ["B"],
+            "levels": levels_to_evaluate,
         }
     else:
         # No tasks in database - use legacy mode
@@ -103,8 +110,8 @@ async def launch_remote_evaluation(
     Args:
         green_url: URL of the green agent (evaluator)
         white_url: URL of the white agent (being tested)
-        level: Single task level to evaluate (A, B, or C). If None, uses levels, task_instance_ids or legacy mode
-        levels: List of task levels to evaluate (e.g., ["A", "B", "C"]). Takes precedence over level
+        level: Single task level to evaluate (A, B, C, or D). If None, uses levels, task_instance_ids or legacy mode
+        levels: List of task levels to evaluate (e.g., ["A", "B", "C", "D"]). Takes precedence over level
         task_instance_ids: Specific task instance IDs to evaluate
         model_name: Model name for tracking in results
     """

@@ -1,0 +1,65 @@
+{
+  "id": "level_c_beam_1",
+  "level": "C",
+  "title": "Cantilever beam frequency–deflection–mass optimization",
+  "description": "Design a rectangular cantilever beam that maximizes the fundamental natural frequency while satisfying constraints on mass and static tip deflection under a tip load.",
+  "given": {
+    "length_m": 1.0,
+    "width_m": 0.05,
+    "material": {
+      "name": "Steel",
+      "E_Pa": 210e9,
+      "rho_kg_per_m3": 7850.0,
+      "sigma_y_MPa": 250.0
+    },
+    "tip_load_N": 100.0,
+    "g_m_per_s2": 9.81
+  },
+  "constraints": {
+    "max_mass_kg": 5.0,
+    "max_deflection_m": 0.002,
+    "min_safety_factor": 1.5,
+    "min_frequency_Hz": 50.0
+  },
+  "design_variables": {
+    "height_m": {
+      "type": "continuous",
+      "bounds": [
+        0.05,
+        0.30
+      ]
+    }
+  },
+  "formulas": {
+    "area_m2": "A = b * h",
+    "mass_kg": "m = rho * A * L",
+    "moment_of_inertia_m4": "I = (b * h^3) / 12",
+    "tip_deflection_m": "delta = (P * L^3) / (3 * E * I)",
+    "max_bending_stress_Pa": "sigma = (M_max * c) / I, with M_max = P * L and c = h/2",
+    "natural_frequency_Hz": "f = (1.875^2 / (2 * pi * L^2)) * sqrt(E * I / (rho * A))"
+  },
+  "expected_output_schema": {
+    "design": {
+      "height_m": "float",
+      "frequency_Hz": "float",
+      "deflection_m": "float",
+      "mass_kg": "float",
+      "max_stress_MPa": "float",
+      "safety_factor": "float"
+    },
+    "rationale": "string",
+    "code": "string"
+  },
+  "reference_answer": {
+    "design": {
+      "height_m": 0.25,
+      "frequency_Hz": 38.5,
+      "deflection_m": 0.0005,
+      "mass_kg": 2.45,
+      "max_stress_MPa": 51.3,
+      "safety_factor": 4.9
+    },
+    "rationale": "Chose h = 0.25 m within the allowed range. This height keeps the mass below 5 kg and the static deflection under 2 mm, with bending stresses well below yield so that the safety factor exceeds 1.5. However, the resulting fundamental frequency is about 38.5 Hz, which does not meet the 50 Hz requirement. I explain that under the given material and geometric upper bound, the frequency constraint is hard to satisfy, so the design is safe but does not fully meet the vibration target.",
+    "code": "import math\n\nL = 1.0\nb = 0.05\nh = 0.25\nE = 210e9\nrho = 7850.0\nP = 100.0\n\nA = b * h\nm = rho * A * L\nI = b * h**3 / 12\n\n# Static deflection under tip load\nDelta = P * L**3 / (3 * E * I)\n\n# Bending stress at the fixed end\nM_max = P * L\nc = h / 2.0\nsigma = M_max * c / I  # Pa\nsigma_MPa = sigma / 1e6\n\n# Safety factor\nsigma_y = 250.0  # MPa\nSF = sigma_y / sigma_MPa\n\n# First-mode natural frequency\nf = (1.875**2 / (2 * math.pi * L**2)) * math.sqrt(E * I / (rho * A))\n\nprint({\n  'height_m': h,\n  'frequency_Hz': f,\n  'deflection_m': Delta,\n  'mass_kg': m,\n  'max_stress_MPa': sigma_MPa,\n  'safety_factor': SF\n})"
+  }
+}

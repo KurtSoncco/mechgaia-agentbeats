@@ -22,6 +22,8 @@ class SandboxExecutor:
             "scipy": scipy,
             "math": __import__("math"),
         }
+        # Maintain state across executions
+        self.persistent_namespace = {}
 
     def execute(
         self,
@@ -41,8 +43,11 @@ class SandboxExecutor:
         """
         timeout = timeout or self.timeout
 
-        # Create execution namespace
+        # Create execution namespace, starting with persistent state
         namespace = self.safe_modules.copy()
+        # Add persistent namespace variables (from previous executions)
+        namespace.update(self.persistent_namespace)
+        # Add/override with provided variables
         if variables:
             namespace.update(variables)
 
@@ -133,6 +138,13 @@ class SandboxExecutor:
             elapsed = time.time() - start_time
             if elapsed > timeout:
                 error = f"Execution timeout after {timeout} seconds"
+
+            # Update persistent namespace with all new/modified variables (except safe modules)
+            if not error and "namespace" in locals():
+                # Save all variables that were created/modified in this execution
+                for key, value in namespace.items():
+                    if key not in self.safe_modules:
+                        self.persistent_namespace[key] = value
 
         return {
             "result": result,
