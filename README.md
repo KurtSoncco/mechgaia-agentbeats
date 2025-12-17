@@ -33,6 +33,23 @@ AGENT_URL_GREEN=http://localhost:9001
 AGENT_URL_WHITE=http://localhost:9002
 ```
 
+## Architecture Flow
+
+```
+┌─────────────┐         ┌──────────────┐         ┌─────────────┐
+│   Launcher  │────────▶│ Green Agent  │────────▶│White Agent  │
+│  (orchestrates) │     │ (Evaluator)  │         │ (LLM being  │
+│             │         │              │         │  tested)    │
+└─────────────┘         └──────────────┘         └─────────────┘
+                                │
+                                ▼
+                        ┌──────────────┐
+                        │   Database   │
+                        │  (Results)   │
+                        └──────────────┘
+```
+
+
 **Note:** If `AGENT_URL_GREEN` or `AGENT_URL_WHITE` are not set, the agents will automatically default to `http://localhost:{port}` based on the port they're running on.
 
 ## Usage
