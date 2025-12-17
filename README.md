@@ -43,8 +43,22 @@ The launcher will start both agents and run a MechGAIA evaluation:
 
 ```bash
 # Launch complete evaluation (starts both agents and runs test)
+# If no levels are specified, all available levels in the database will be evaluated
 uv run python main.py launch
+
+# Run a specific level (A, B, C, or D)
+uv run python main.py launch --level A
+# or using short form
+uv run python main.py launch -l A
+
+# Run multiple levels
+uv run python main.py launch --levels A,B,C
 ```
+
+**Level Options:**
+- `--level` / `-l`: Run a single task level (A, B, C, or D)
+- `--levels`: Run multiple levels as comma-separated values (e.g., `A,B,C`)
+- If neither option is specified, all available levels in the database will be automatically detected and evaluated
 
 ### Run Agents Separately
 
@@ -63,8 +77,41 @@ uv run python main.py white
 If you have agents running remotely:
 
 ```bash
-uv run python main.py launch-remote <green_url> <white_url>
+# Basic remote evaluation
+uv run python main.py launch_remote <green_url> <white_url>
+
+# Remote evaluation with specific level(s)
+uv run python main.py launch_remote <green_url> <white_url> --level A
+uv run python main.py launch_remote <green_url> <white_url> --levels A,B,C
+
+# Remote evaluation with custom model
+uv run python main.py launch_remote <green_url> <white_url> --model openai/gpt-4o
 ```
+
+## Testing
+
+The project includes a comprehensive test suite using pytest. Run tests with:
+
+```bash
+# Run all tests
+uv run pytest tests/
+
+# Run tests with verbose output
+uv run pytest tests/ -v
+
+# Run a specific test file
+uv run pytest tests/test_schema_validation.py
+
+# Run a specific test
+uv run pytest tests/test_schema_validation.py::test_level_a_schema_validation
+```
+
+**Test Coverage:**
+- Schema validation for all levels (A, B, C, D)
+- Numeric verifiers for Level B/C/D tasks
+- JSON parsing and response extraction
+- Level D example validation
+- White agent output parsing
 
 ## MechGAIA Environment
 

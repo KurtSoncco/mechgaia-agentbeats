@@ -237,6 +237,20 @@ class BenchmarkDatabase:
 
         return result
 
+    def get_available_levels(self) -> List[str]:
+        """Get all available levels that have tasks in the database."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT DISTINCT level FROM tasks ORDER BY level
+        """)
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [row[0] for row in rows]
+
     def get_task_instances(self, task_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get task instances, optionally filtered by task_id."""
         conn = sqlite3.connect(self.db_path)

@@ -5,7 +5,7 @@ Comprehensive evaluation report with detailed metrics across all task levels.
 ## Executive Summary
 | Level | Tasks | Instances | Avg Primary Score | Avg Success Rate |
 |-------|-------|-----------|-------------------|------------------|
-| A | 5 | 21 | 0.510 | 60.0% |
+| A | 5 | 71 | 0.853 | 100.0% |
 | B | 2 | 43 | 0.709 | 100.0% |
 | C | 1 | 0 | 0.000 | 0.0% |
 | D | 1 | 0 | 0.000 | 0.0% |
@@ -16,11 +16,11 @@ Comprehensive evaluation report with detailed metrics across all task levels.
 ### Overall Statistics
 | Task | Model | Primary Score | Success Rate | N | CI (95%) |
 |------|-------|---------------|--------------|---|----------|
-| level_a_1 | openai/gpt-4o | 0.300 | 0.0% | 5 | [0.100, 0.500] |
-| level_a_2 | openai/gpt-4o | 0.500 | 100.0% | 4 | [0.125, 0.875] |
-| level_a_3 | openai/gpt-4o | 0.375 | 0.0% | 4 | [0.125, 0.500] |
-| level_a_4 | openai/gpt-4o | 0.625 | 100.0% | 4 | [0.250, 1.000] |
-| level_a_5 | openai/gpt-4o | 0.750 | 100.0% | 4 | [0.250, 1.000] |
+| level_a_1 | openai/gpt-4o | 0.767 | 100.0% | 15 | [0.600, 0.933] |
+| level_a_2 | openai/gpt-4o | 0.857 | 100.0% | 14 | [0.713, 1.000] |
+| level_a_3 | openai/gpt-4o | 0.821 | 100.0% | 14 | [0.643, 0.964] |
+| level_a_4 | openai/gpt-4o | 0.893 | 100.0% | 14 | [0.750, 1.000] |
+| level_a_5 | openai/gpt-4o | 0.929 | 100.0% | 14 | [0.786, 1.000] |
 
 ### Detailed Metrics Breakdown
 | Task | Model | conceptual_clarity | correctness | distractor_analysis | overall_reasoning | overall_score | reasoning_quality | technical_accuracy | technical_soundness |
@@ -37,7 +37,7 @@ Comprehensive evaluation report with detailed metrics across all task levels.
 ### Overall Statistics
 | Task | Model | Primary Score | Success Rate | N | CI (95%) |
 |------|-------|---------------|--------------|---|----------|
-| level_b_1 | openai/gpt-4o | 0.654 | 100.0% | 26 | [0.462, 0.808] |
+| level_b_1 | openai/gpt-4o | 0.654 | 100.0% | 26 | [0.462, 0.846] |
 | level_b_2 | openai/gpt-4o | 0.765 | 100.0% | 17 | [0.529, 0.941] |
 
 ### Detailed Metrics Breakdown
@@ -78,12 +78,12 @@ Comprehensive evaluation report with detailed metrics across all task levels.
 
 | Task ID | Model | Mean | CI Lower | CI Upper | N |
 |---------|-------|------|----------|----------|---|
-| level_a_1 | openai/gpt-4o | 0.300 | 0.100 | 0.500 | 5 |
-| level_a_2 | openai/gpt-4o | 0.500 | 0.125 | 0.875 | 4 |
-| level_a_3 | openai/gpt-4o | 0.375 | 0.125 | 0.500 | 4 |
-| level_a_4 | openai/gpt-4o | 0.625 | 0.250 | 1.000 | 4 |
-| level_a_5 | openai/gpt-4o | 0.750 | 0.250 | 1.000 | 4 |
-| level_b_1 | openai/gpt-4o | 0.654 | 0.462 | 0.808 | 26 |
+| level_a_1 | openai/gpt-4o | 0.767 | 0.600 | 0.933 | 15 |
+| level_a_2 | openai/gpt-4o | 0.857 | 0.713 | 1.000 | 14 |
+| level_a_3 | openai/gpt-4o | 0.821 | 0.643 | 0.964 | 14 |
+| level_a_4 | openai/gpt-4o | 0.893 | 0.750 | 1.000 | 14 |
+| level_a_5 | openai/gpt-4o | 0.929 | 0.786 | 1.000 | 14 |
+| level_b_1 | openai/gpt-4o | 0.654 | 0.462 | 0.846 | 26 |
 | level_b_2 | openai/gpt-4o | 0.765 | 0.529 | 0.941 | 17 |
 | level_c_1 | openai/gpt-4o | 0.000 | 0.000 | 0.000 | 0 |
 | level_d_two_span_1 | openai/gpt-4o | 0.000 | 0.000 | 0.000 | 0 |

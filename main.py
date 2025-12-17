@@ -44,9 +44,26 @@ def run():
 
 
 @app.command()
-def launch():
-    """Launch the complete evaluation workflow."""
-    asyncio.run(launch_evaluation())
+def launch(
+    level: str = typer.Option(
+        None, "--level", "-l", help="Single task level (A, B, C, or D)"
+    ),
+    levels: str = typer.Option(
+        None, "--levels", help="Comma-separated levels (e.g., 'A,B,C')"
+    ),
+):
+    """Launch the complete evaluation workflow.
+
+    If no levels are specified, all available levels in the database will be evaluated.
+    """
+    levels_list = None
+    if levels:
+        levels_list = [l.strip().upper() for l in levels.split(",")]
+
+    if level:
+        level = level.upper()
+
+    asyncio.run(launch_evaluation(level=level, levels=levels_list))
 
 
 @app.command()

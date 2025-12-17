@@ -8,7 +8,16 @@ from src.my_util import my_a2a
 from src.white_agent.agent import start_white_agent
 
 
-async def launch_evaluation():
+async def launch_evaluation(
+    level: str | None = None,
+    levels: list[str] | None = None,
+):
+    """Launch the complete evaluation workflow.
+
+    Args:
+        level: Single task level to evaluate (A, B, C, or D)
+        levels: List of task levels to evaluate (e.g., ["A", "B", "C", "D"])
+    """
     # start green agent
     print("Launching green agent...")
     green_address = ("localhost", 9001)
@@ -39,28 +48,56 @@ async def launch_evaluation():
     from src.mechgaia_env.database import BenchmarkDatabase
 
     db = BenchmarkDatabase()
-    level_c_tasks = db.get_tasks_by_level("C")
-    level_d_tasks = db.get_tasks_by_level("D")
 
-    if level_c_tasks or level_d_tasks:
-        # Database has tasks - evaluate available levels
-        levels_to_evaluate = []
-        if level_c_tasks:
-            print(f"Found {len(level_c_tasks)} Level C tasks in database.")
-            levels_to_evaluate.append("C")
-        if level_d_tasks:
-            print(f"Found {len(level_d_tasks)} Level D tasks in database.")
-            levels_to_evaluate.append("D")
+    # Determine which levels to evaluate
+    levels_to_evaluate = None
+    if levels:
+        # Use explicitly provided levels
+        levels_to_evaluate = levels
+    elif level:
+        # Use single level
+        levels_to_evaluate = [level]
+    else:
+        # Auto-detect all available levels
+        available_levels = db.get_available_levels()
+        if available_levels:
+            levels_to_evaluate = available_levels
+            print(f"Auto-detected levels: {', '.join(available_levels)}")
+        else:
+            levels_to_evaluate = None
 
-        print(f"Evaluating Level {', '.join(levels_to_evaluate)} tasks...")
-        task_config = {
-            "env": "mechgaia",
-            "user_strategy": "llm",
-            "user_model": "openai/gpt-4o",
-            "user_provider": "openai",
-            "task_split": "test",
-            "levels": levels_to_evaluate,
-        }
+    if levels_to_evaluate:
+        # Validate that all requested levels have tasks
+        valid_levels = []
+        for lvl in levels_to_evaluate:
+            tasks = db.get_tasks_by_level(lvl)
+            if tasks:
+                print(f"Found {len(tasks)} Level {lvl} tasks in database.")
+                valid_levels.append(lvl)
+            else:
+                print(f"Warning: No tasks found for Level {lvl}. Skipping.")
+
+        if valid_levels:
+            print(f"Evaluating Level {', '.join(valid_levels)} tasks...")
+            task_config = {
+                "env": "mechgaia",
+                "user_strategy": "llm",
+                "user_model": "openai/gpt-4o",
+                "user_provider": "openai",
+                "task_split": "test",
+                "levels": valid_levels,
+            }
+        else:
+            # No valid levels found - use legacy mode
+            print("No valid levels found. Using legacy mode.")
+            task_config = {
+                "env": "mechgaia",
+                "user_strategy": "llm",
+                "user_model": "openai/gpt-4o",
+                "user_provider": "openai",
+                "task_split": "test",
+                "task_ids": [1],  # Legacy mode
+            }
     else:
         # No tasks in database - use legacy mode
         print("No tasks in database. Using legacy mode.")
