@@ -1,17 +1,17 @@
 """White agent implementation - the target agent being tested."""
 
-import uvicorn
-import dotenv
 import os
-from a2a.server.apps import A2AStarletteApplication
-from a2a.server.request_handlers import DefaultRequestHandler
+
+import dotenv
+import uvicorn
 from a2a.server.agent_execution import AgentExecutor, RequestContext
+from a2a.server.apps import A2AStarletteApplication
 from a2a.server.events import EventQueue
+from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
-from a2a.types import AgentSkill, AgentCard, AgentCapabilities
+from a2a.types import AgentCapabilities, AgentCard, AgentSkill
 from a2a.utils import new_agent_text_message
 from litellm import completion
-
 
 dotenv.load_dotenv()
 
@@ -53,6 +53,8 @@ class GeneralWhiteAgentExecutor(AgentExecutor):
                 "content": user_input,
             }
         )
+        # Use OpenAI directly (litellm will automatically use OPENAI_API_KEY from environment)
+        # Optionally support litellm_proxy if LITELLM_PROXY_API_KEY is set
         if os.environ.get("LITELLM_PROXY_API_KEY") is not None:
             response = completion(
                 messages=messages,
@@ -61,6 +63,7 @@ class GeneralWhiteAgentExecutor(AgentExecutor):
                 temperature=0.0,
             )
         else:
+            # Default to OpenAI - requires OPENAI_API_KEY environment variable
             response = completion(
                 messages=messages,
                 model="openai/gpt-4o",
@@ -87,11 +90,11 @@ class GeneralWhiteAgentExecutor(AgentExecutor):
 def start_white_agent(agent_name="general_white_agent", host="localhost", port=9002):
     print("Starting white agent...")
 
-    # # # without controller
-    # url = f"http://{host}:{port}"
-    # card = prepare_white_agent_card(url)
-
-    card = prepare_white_agent_card(os.getenv("AGENT_URL"))
+    # Determine agent URL: check AGENT_URL_WHITE, then AGENT_URL, then default to localhost
+    agent_url = os.getenv("AGENT_URL_WHITE") or os.getenv("AGENT_URL")
+    if not agent_url:
+        agent_url = f"http://{host}:{port}"
+    card = prepare_white_agent_card(agent_url)
 
     request_handler = DefaultRequestHandler(
         agent_executor=GeneralWhiteAgentExecutor(),

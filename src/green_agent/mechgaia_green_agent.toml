@@ -22,7 +22,7 @@ http://localhost:9002/
 You should use the following env configuration:
 <env_config>
 {
-  "env": "retail",
+  "env": "mechgaia",
   "user_strategy": "llm",
   "user_model": "openai/gpt-4o",
   "user_provider": "openai",

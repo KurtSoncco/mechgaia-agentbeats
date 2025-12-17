@@ -33,19 +33,11 @@ async def launch_evaluation():
 
     # send the task description
     print("Sending task description to green agent...")
-    # task_config = {
-    #     "env": "retail",
-    #     "user_strategy": "llm",
-    #     "user_model": "openai/gpt-4o",
-    #     "user_provider": "openai",
-    #     "task_split": "test",
-    #     "task_ids": [1],
-    # }
     task_config = {
-        "env": "retail",
+        "env": "mechgaia",
         "user_strategy": "llm",
-        "user_model": "openrouter/openai/gpt-4o",
-        "user_provider": "litellm_proxy",
+        "user_model": "openai/gpt-4o",
+        "user_provider": "openai",
         "task_split": "test",
         "task_ids": [1],
     }
@@ -76,10 +68,10 @@ You should use the following env configuration:
 
 async def launch_remote_evaluation(green_url: str, white_url: str):
     task_config = {
-        "env": "retail",
+        "env": "mechgaia",
         "user_strategy": "llm",
-        "user_model": "openrouter/openai/gpt-4o",
-        "user_provider": "litellm_proxy",
+        "user_model": "openai/gpt-4o",
+        "user_provider": "openai",
         "task_split": "test",
         "task_ids": [1],
     }

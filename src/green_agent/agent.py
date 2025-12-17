@@ -15,10 +15,7 @@ from a2a.server.tasks import InMemoryTaskStore
 from a2a.types import AgentCard, Message, SendMessageSuccessResponse
 from a2a.utils import get_text_parts, new_agent_text_message
 
-# from tau_bench.agents.tool_calling_agent import ToolCallingAgent
-from tau_bench.envs import get_env
-from tau_bench.types import RESPOND_ACTION_NAME, Action, SolveResult
-
+from src.mechgaia_env import RESPOND_ACTION_NAME, Action, SolveResult, get_env
 from src.my_util import my_a2a, parse_tags
 
 dotenv.load_dotenv()
@@ -31,7 +28,6 @@ def load_agent_card_toml(agent_name):
 
 
 async def ask_agent_to_solve(white_agent_url, env, task_index, max_num_steps=30):
-    # migrated from https://github.com/sierra-research/tau-bench/blob/4754e6b406507dbcbce8e8b3855dcf80aaec18ac/tau_bench/agents/tool_calling_agent.py#L27
     total_cost = 0.0
     env_reset_res = env.reset(task_index=task_index)
     obs = env_reset_res.observation
@@ -145,7 +141,6 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
         env_config = json.loads(env_config_str)
 
         # set up the environment
-        # migrate from https://github.com/sierra-research/tau-bench/blob/4754e6b406507dbcbce8e8b3855dcf80aaec18ac/tau_bench/run.py#L20
         print("Green agent: Setting up the environment...")
         assert len(env_config["task_ids"]) == 1, (
             "Only single task supported for demo purpose"
@@ -195,11 +190,11 @@ def start_green_agent(agent_name="mechgaia_green_agent", host="localhost", port=
     print("Starting green agent...")
     agent_card_dict = load_agent_card_toml(agent_name)
 
-    # # without controller
-    # url = f"http://{host}:{port}"
-    # agent_card_dict["url"] = url  # complete all required card fields
-
-    agent_card_dict["url"] = os.getenv("AGENT_URL")
+    # Determine agent URL: check AGENT_URL_GREEN, then AGENT_URL, then default to localhost
+    agent_url = os.getenv("AGENT_URL_GREEN") or os.getenv("AGENT_URL")
+    if not agent_url:
+        agent_url = f"http://{host}:{port}"
+    agent_card_dict["url"] = agent_url
 
     request_handler = DefaultRequestHandler(
         agent_executor=MechgaiaGreenAgentExecutor(),

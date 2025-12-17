@@ -9,10 +9,9 @@ dependencies = [
     "dotenv>=0.9.9",
     "earthshaker>=0.1.12",
     "pydantic-settings>=2.11.0",
-    "tau-bench",
     "typer>=0.19.2",
     "uvicorn>=0.37.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "litellm>=1.60.1",
 ]
-
-[tool.uv.sources]
-tau-bench = { git = "https://github.com/sierra-research/tau-bench.git" }
