@@ -1,20 +1,18 @@
 [project]
-name = "mechgaia-agentbeats"
+name = "agentify-example-tau-bench"
 version = "0.1.0"
-description = "MechGaia AgentBeats Green/White Agents."
+description = "Example code of agentifying tau-bench for the blog `Agentify the Agent Assessment`."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "a2a-sdk[http-server]>=0.3.8",
     "dotenv>=0.9.9",
+    "earthshaker>=0.1.12",
+    "pydantic-settings>=2.11.0",
+    "tau-bench",
     "typer>=0.19.2",
     "uvicorn>=0.37.0",
-    "httpx>=0.27.0",
-    "litellm>=1.56.1",
-    "earthshaker>=0.2.1",
 ]
 
-[project.scripts]
-agentbeats = "main:app"
-green-agent = "src.green_agent.main:app"
-white-agent = "src.white_agent.main:app"
+[tool.uv.sources]
+tau-bench = { git = "https://github.com/sierra-research/tau-bench.git" }
