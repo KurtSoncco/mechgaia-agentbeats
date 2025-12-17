@@ -48,6 +48,11 @@ async def send_message(
     url, message, task_id=None, context_id=None
 ) -> SendMessageResponse:
     card = await get_agent_card(url)
+    # Override the card's URL with the actual URL we want to use
+    # This is necessary because the card may contain a hardcoded public URL
+    # but we want to use the local URL instead
+    if card:
+        card.url = url
     httpx_client = httpx.AsyncClient(timeout=120.0)
     client = A2AClient(httpx_client=httpx_client, agent_card=card)
 
@@ -65,3 +70,22 @@ async def send_message(
     req = SendMessageRequest(id=request_id, params=params)
     response = await client.send_message(request=req)
     return response
+
+
+def extract_response_text(response: SendMessageResponse) -> str:
+    """Extract readable text from a SendMessageResponse."""
+    result = getattr(response, "result", None)
+    if result:
+        parts = getattr(result, "parts", None)
+        if parts:
+            return "\n".join(
+                getattr(part, "text", str(part)) for part in parts
+            )
+        else:
+            text = getattr(result, "text", None)
+            if text:
+                return text
+            else:
+                return str(result)
+    else:
+        return str(response)

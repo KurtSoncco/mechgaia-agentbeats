@@ -1,0 +1,16 @@
+name = "MechGaia White Agent"
+description = "MechGaia mechanical engineering solver"
+version = "0.1.0"
+url = "https://white.mechgaia.org"
+
+defaultInputModes = ["text"]
+defaultOutputModes = ["text"]
+
+[capabilities]
+streaming = false
+
+[[skills]]
+id = "mechanical_engineering_solver"
+name = "MechGaia mechanical engineering solver"
+description = "Solves mechanical engineering tasks with Sciencitific Computing Libraries and CAD tools"
+tags = ["white agent", "solver", "mechgaia"]
