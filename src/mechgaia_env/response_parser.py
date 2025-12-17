@@ -200,6 +200,52 @@ def extract_json_from_response(response_text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def ensure_json_wrapped(
+    response_text: str, parsed_json: Optional[Dict[str, Any]]
+) -> str:
+    """Post-process response to ensure JSON is wrapped in ```json fences.
+
+    If parsed_json is provided, reconstructs the response with proper JSON formatting.
+    This is a fallback to ensure the response always has proper JSON formatting even
+    if the model's output was imperfect.
+
+    Args:
+        response_text: Original response text
+        parsed_json: Parsed JSON object (if successfully extracted)
+
+    Returns:
+        Response text with JSON properly wrapped in ```json fences
+    """
+    if parsed_json is None:
+        # No JSON found - return original (can't fix what isn't there)
+        return response_text
+
+    # Check if JSON is already properly wrapped
+    if "```json" in response_text:
+        return response_text
+
+    # Reconstruct response with proper JSON wrapping
+    # Try to preserve any explanation text before the JSON
+    json_str = json.dumps(parsed_json, indent=2)
+
+    # Look for text before potential JSON (explanation, reasoning, etc.)
+    # Try to find where JSON-like content starts
+    json_start_pattern = r"(\{[^{}]*design[^{}]*\})"
+    match = re.search(json_start_pattern, response_text, re.DOTALL)
+
+    if match:
+        # Found JSON-like content - preserve text before it
+        json_start_idx = match.start()
+        prefix_text = response_text[:json_start_idx].strip()
+        if prefix_text:
+            return f"{prefix_text}\n\n```json\n{json_str}\n```"
+        else:
+            return f"```json\n{json_str}\n```"
+    else:
+        # No clear JSON found - just wrap the parsed JSON
+        return f"```json\n{json_str}\n```"
+
+
 def extract_design_parameters(response_text: str) -> Dict[str, Any]:
     """Extract design parameters from response text.
 
@@ -376,6 +422,9 @@ def parse_response(
             parsed["design"] = json_obj.get("design", {})
             parsed["rationale"] = json_obj.get("rationale", "")
             parsed["code"] = json_obj.get("code", "")
+            # Override explanation with rationale if available
+            if parsed["rationale"]:
+                parsed["explanation"] = parsed["rationale"]
         else:
             # Fallback to regex-based extraction
             code = extract_code_snippet(response_text)

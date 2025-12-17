@@ -1,13 +1,14 @@
 # MechGAIA Benchmark Results
 Comprehensive evaluation report with detailed metrics across all task levels.
 ---
+
 ## Executive Summary
 | Level | Tasks | Instances | Avg Primary Score | Avg Success Rate |
 |-------|-------|-----------|-------------------|------------------|
-| A | 5 | 21 | 0.500 | 28.6% |
-| B | 2 | 43 | 0.698 | 69.8% |
-| C | 1 | 29 | 0.624 | 72.4% |
-| D | 1 | 2 | 0.650 | 50.0% |
+| A | 5 | 21 | 0.510 | 60.0% |
+| B | 2 | 43 | 0.709 | 100.0% |
+| C | 1 | 0 | 0.000 | 0.0% |
+| D | 1 | 0 | 0.000 | 0.0% |
 
 ---
 
@@ -15,20 +16,20 @@ Comprehensive evaluation report with detailed metrics across all task levels.
 ### Overall Statistics
 | Task | Model | Primary Score | Success Rate | N | CI (95%) |
 |------|-------|---------------|--------------|---|----------|
-| Linear vs Nonlinear Elasticity | openai/gpt-4o | 0.300 | 0.0% | 5 | [0.100, 0.500] |
-| Yield vs Ultimate Strength | openai/gpt-4o | 0.500 | 25.0% | 4 | [0.125, 0.875] |
-| Fatigue Mechanisms | openai/gpt-4o | 0.375 | 0.0% | 4 | [0.125, 0.500] |
-| Fracture Modes | openai/gpt-4o | 0.625 | 50.0% | 4 | [0.250, 1.000] |
-| Failure Criteria | openai/gpt-4o | 0.750 | 75.0% | 4 | [0.250, 1.000] |
+| level_a_1 | openai/gpt-4o | 0.300 | 0.0% | 5 | [0.100, 0.500] |
+| level_a_2 | openai/gpt-4o | 0.500 | 100.0% | 4 | [0.125, 0.875] |
+| level_a_3 | openai/gpt-4o | 0.375 | 0.0% | 4 | [0.125, 0.500] |
+| level_a_4 | openai/gpt-4o | 0.625 | 100.0% | 4 | [0.250, 1.000] |
+| level_a_5 | openai/gpt-4o | 0.750 | 100.0% | 4 | [0.250, 1.000] |
 
 ### Detailed Metrics Breakdown
-| Task | Model | technical_accuracy | conceptual_clarity | distractor_analysis | reasoning_quality | overall_score |
-|------|-------|---|---|---|---|---|
-| Linear vs Nonlinear Elasticity | openai/gpt-4o | 1.000 | 0.640 | 0.480 | 1.000 | 0.867 |
-| Yield vs Ultimate Strength | openai/gpt-4o | 1.000 | 0.650 | 0.400 | 0.800 | 0.800 |
-| Fatigue Mechanisms | openai/gpt-4o | 1.000 | 0.800 | 0.500 | 1.000 | 0.800 |
-| Fracture Modes | openai/gpt-4o | 1.000 | 0.800 | 0.500 | 1.000 | 0.867 |
-| Failure Criteria | openai/gpt-4o | 1.000 | 0.750 | 0.450 | 0.800 | 0.800 |
+| Task | Model | conceptual_clarity | correctness | distractor_analysis | overall_reasoning | overall_score | reasoning_quality | technical_accuracy | technical_soundness |
+|------|-------|---|---|---|---|---|---|---|---|
+| level_a_1 | openai/gpt-4o | 0.200 | 0.000 | 0.200 | 0.200 | 0.000 | 0.000 | 0.000 | 0.200 |
+| level_a_2 | openai/gpt-4o | 0.200 | 0.000 | 0.200 | 0.200 | 0.000 | 0.000 | 0.000 | 0.200 |
+| level_a_3 | openai/gpt-4o | 0.200 | 0.000 | 0.200 | 0.200 | 0.000 | 0.000 | 0.000 | 0.200 |
+| level_a_4 | openai/gpt-4o | 0.200 | 0.000 | 0.200 | 0.200 | 0.000 | 0.000 | 0.000 | 0.200 |
+| level_a_5 | openai/gpt-4o | 0.200 | 0.000 | 0.200 | 0.200 | 0.000 | 0.000 | 0.000 | 0.200 |
 
 ---
 
@@ -36,14 +37,14 @@ Comprehensive evaluation report with detailed metrics across all task levels.
 ### Overall Statistics
 | Task | Model | Primary Score | Success Rate | N | CI (95%) |
 |------|-------|---------------|--------------|---|----------|
-| Euler-Bernoulli Beam Deflection | openai/gpt-4o | 0.654 | 65.4% | 26 | [0.462, 0.808] |
-| Axial Bar Extension | openai/gpt-4o | 0.765 | 76.5% | 17 | [0.529, 0.941] |
+| level_b_1 | openai/gpt-4o | 0.654 | 100.0% | 26 | [0.462, 0.808] |
+| level_b_2 | openai/gpt-4o | 0.765 | 100.0% | 17 | [0.529, 0.941] |
 
 ### Detailed Metrics Breakdown
-| Task | Model | value_tolerance | unit_consistency | code_execution | mej_technical_accuracy | mej_mathematical_rigor | mej_problem_solving_approach | mej_engineering_judgment | mej_overall_score |
-|------|-------|---|---|---|---|---|---|---|---|
-| Euler-Bernoulli Beam Deflection | openai/gpt-4o | 0.708 | 0.500 | 0.462 | 0.256 | 0.296 | 0.216 | 0.224 | 0.240 |
-| Axial Bar Extension | openai/gpt-4o | 0.765 | 0.882 | 0.500 | 0.824 | 0.824 | 0.447 | 0.671 | 0.682 |
+| Task | Model | absolute_error | code_execution | correctness | error | intermediate_logic | mej_engineering_judgment | mej_mathematical_rigor | mej_overall_score | mej_problem_solving_approach | mej_technical_accuracy | relative_error | unit_consistency | unit_conversion | value_tolerance |
+|------|-------|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| level_b_1 | openai/gpt-4o | 204.560 | 0.500 | 0.000 | 0.000 | 0.500 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 1768967897801998336.000 | 0.500 | 0.000 | 0.000 |
+| level_b_2 | openai/gpt-4o | 0.253 | 0.500 | 0.000 | 0.000 | 0.500 | 0.400 | 0.400 | 0.400 | 0.200 | 0.400 | 22.517 | 0.500 | 0.000 | 0.000 |
 
 ---
 
@@ -51,12 +52,12 @@ Comprehensive evaluation report with detailed metrics across all task levels.
 ### Overall Statistics
 | Task | Model | Primary Score | Success Rate | N | CI (95%) |
 |------|-------|---------------|--------------|---|----------|
-| Cantilever Beam Frequency Optimization | openai/gpt-4o | 0.624 | 72.4% | 29 | [0.564, 0.681] |
+| level_c_1 | openai/gpt-4o | 0.000 | 0.0% | 0 | [0.000, 0.000] |
 
 ### Detailed Metrics Breakdown
-| Task | Model | technical_accuracy | safety_constraint_awareness | reasoning_quality | engineering_judgment |
-|------|-------|---|---|---|---|
-| Cantilever Beam Frequency Optimization | openai/gpt-4o | 0.634 | 0.731 | 0.572 | 0.600 |
+| Task | Model | engineering_judgment | overall_score | reasoning_quality | safety_constraint_awareness | technical_accuracy |
+|------|-------|---|---|---|---|---|
+| level_c_1 | openai/gpt-4o | 0.400 | 0.400 | 0.400 | 0.600 | 0.400 |
 
 ---
 
@@ -64,12 +65,25 @@ Comprehensive evaluation report with detailed metrics across all task levels.
 ### Overall Statistics
 | Task | Model | Primary Score | Success Rate | N | CI (95%) |
 |------|-------|---------------|--------------|---|----------|
-| Two-span continuous beam system design | openai/gpt-4o | 0.650 | 50.0% | 2 | [0.400, 0.900] |
+| level_d_two_span_1 | openai/gpt-4o | 0.000 | 0.0% | 0 | [0.000, 0.000] |
 
 ### Detailed Metrics Breakdown
-| Task | Model | technical_accuracy | multi_step_coordination | system_constraint_awareness | engineering_judgment |
-|------|-------|---|---|---|---|
-| Two-span continuous beam system design | openai/gpt-4o | 0.600 | 0.800 | 0.700 | 0.700 |
+| Task | Model | engineering_judgment | multi_step_coordination | overall_score | system_constraint_awareness | technical_accuracy |
+|------|-------|---|---|---|---|---|
+| level_d_two_span_1 | openai/gpt-4o | 0.800 | 1.000 | 0.900 | 1.000 | 0.800 |
 
 ---
 
+## Summary Statistics
+
+| Task ID | Model | Mean | CI Lower | CI Upper | N |
+|---------|-------|------|----------|----------|---|
+| level_a_1 | openai/gpt-4o | 0.300 | 0.100 | 0.500 | 5 |
+| level_a_2 | openai/gpt-4o | 0.500 | 0.125 | 0.875 | 4 |
+| level_a_3 | openai/gpt-4o | 0.375 | 0.125 | 0.500 | 4 |
+| level_a_4 | openai/gpt-4o | 0.625 | 0.250 | 1.000 | 4 |
+| level_a_5 | openai/gpt-4o | 0.750 | 0.250 | 1.000 | 4 |
+| level_b_1 | openai/gpt-4o | 0.654 | 0.462 | 0.808 | 26 |
+| level_b_2 | openai/gpt-4o | 0.765 | 0.529 | 0.941 | 17 |
+| level_c_1 | openai/gpt-4o | 0.000 | 0.000 | 0.000 | 0 |
+| level_d_two_span_1 | openai/gpt-4o | 0.000 | 0.000 | 0.000 | 0 |

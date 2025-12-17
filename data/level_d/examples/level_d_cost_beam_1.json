@@ -1,0 +1,164 @@
+{
+  "id": "level_d_cost_beam_1",
+  "level": "D",
+  "type": "material_geometry_cost_design",
+  "title": "Cost-optimal simply supported beam design",
+  "description": "Select material and rectangular cross-section for a simply supported beam to satisfy deflection, stress, and frequency constraints while minimizing cost.",
+  "given": {
+    "geometry": {
+      "span_length_m": 4.0,
+      "width_m_bounds_m": [
+        0.10,
+        0.30
+      ],
+      "height_m_bounds_m": [
+        0.15,
+        0.45
+      ]
+    },
+    "loads": {
+      "uniform_load_kN_per_m": 15.0
+    },
+    "materials": [
+      {
+        "name": "Steel",
+        "E_Pa": 210e9,
+        "rho_kg_per_m3": 7850.0,
+        "sigma_y_MPa": 250.0,
+        "cost_per_kg": 1.0
+      },
+      {
+        "name": "Aluminum",
+        "E_Pa": 70e9,
+        "rho_kg_per_m3": 2700.0,
+        "sigma_y_MPa": 275.0,
+        "cost_per_kg": 3.0
+      },
+      {
+        "name": "Composite",
+        "E_Pa": 120e9,
+        "rho_kg_per_m3": 1600.0,
+        "sigma_y_MPa": 400.0,
+        "cost_per_kg": 5.0
+      }
+    ]
+  },
+  "constraints": {
+    "max_deflection_m": 0.015,
+    "max_bending_stress_MPa": "sigma_y / 1.5",
+    "min_natural_frequency_Hz": 8.0,
+    "max_total_cost_USD": 2500.0
+  },
+  "objectives": [
+    "Satisfy all serviceability and strength constraints",
+    "Minimize material cost"
+  ],
+  "steps": [
+    {
+      "name": "select_material_and_section",
+      "description": "Choose material and beam cross-section dimensions (width, height).",
+      "design_variables": {
+        "material": {
+          "type": "categorical",
+          "options": [
+            "Steel",
+            "Aluminum",
+            "Composite"
+          ]
+        },
+        "width_m": {
+          "type": "continuous",
+          "bounds": [
+            0.10,
+            0.30
+          ]
+        },
+        "height_m": {
+          "type": "continuous",
+          "bounds": [
+            0.15,
+            0.45
+          ]
+        }
+      }
+    },
+    {
+      "name": "check_deflection_and_stress",
+      "description": "Compute maximum deflection and bending stress for the chosen design.",
+      "requires_code": true,
+      "formulas": {
+        "moment_of_inertia": "I = b * h^3 / 12",
+        "max_deflection": "delta_max = 5 w L^4 / (384 E I)",
+        "max_bending_moment": "M_max = w L^2 / 8",
+        "bending_stress": "sigma = M_max * c / I, c = h/2"
+      }
+    },
+    {
+      "name": "frequency_and_cost_evaluation",
+      "description": "Compute first-mode natural frequency and total material cost.",
+      "requires_code": true,
+      "formulas": {
+        "mass_kg": "m = rho * A * L",
+        "effective_mass": "m_eff ≈ 0.5 * m",
+        "equivalent_stiffness": "k_eq ≈ 48 E I / L^3 (for simply supported beam)",
+        "natural_frequency_Hz": "f = (1 / (2 pi)) * sqrt(k_eq / m_eff)",
+        "cost_USD": "cost = m * cost_per_kg"
+      }
+    }
+  ],
+  "expected_output_schema": {
+    "design": {
+      "material": "string",
+      "width_m": "float",
+      "height_m": "float"
+    },
+    "system_metrics": {
+      "max_deflection_m": "float",
+      "max_bending_stress_MPa": "float",
+      "natural_frequency_Hz": "float",
+      "mass_kg": "float",
+      "total_cost_USD": "float"
+    },
+    "rationale": "string",
+    "code": "string"
+  },
+  "materials": [
+    {
+      "name": "Steel",
+      "E_Pa": 210e9,
+      "rho_kg_per_m3": 7850.0,
+      "sigma_y_MPa": 250.0,
+      "cost_per_kg": 1.0
+    },
+    {
+      "name": "Aluminum",
+      "E_Pa": 70e9,
+      "rho_kg_per_m3": 2700.0,
+      "sigma_y_MPa": 275.0,
+      "cost_per_kg": 3.0
+    },
+    {
+      "name": "Composite",
+      "E_Pa": 120e9,
+      "rho_kg_per_m3": 1600.0,
+      "sigma_y_MPa": 400.0,
+      "cost_per_kg": 5.0
+    }
+  ],
+  "reference_answer": {
+    "design": {
+      "material": "Aluminum",
+      "width_m": 0.20,
+      "height_m": 0.35
+    },
+    "system_metrics": {
+      "max_deflection_m": 0.012,
+      "max_bending_stress_MPa": 155.0,
+      "natural_frequency_Hz": 9.5,
+      "mass_kg": 302.0,
+      "total_cost_USD": 906.0
+    },
+    "rationale": "Chose aluminum with a 0.20 m by 0.35 m rectangular section to reduce mass while satisfying deflection and stress limits. The maximum deflection is about 12 mm, below the 15 mm constraint, and the bending stress is significantly below the allowable stress (sigma_y/1.5). The first-mode natural frequency is about 9.5 Hz, above the minimum requirement of 8 Hz. Although composite could achieve even higher frequency, its higher cost per kilogram leads to a more expensive design. This aluminum section provides a good trade-off between cost and performance, though it slightly exceeds the target cost budget used in this example; for the benchmark, the agent should aim to find the lowest-cost design that strictly satisfies all constraints.",
+    "code": "import math\n\n# Geometry\nL = 4.0\nb = 0.20\nh = 0.35\n\n# Loads\nw_kN_per_m = 15.0\nw = w_kN_per_m * 1e3  # N/m\n\n# Material: Aluminum\nE = 70e9\nrho = 2700.0\nsigma_y = 275e6\ncost_per_kg = 3.0\n\n# Section properties\nA = b * h\nI = b * h**3 / 12.0\n\n# Deflection\ndelta_max = 5.0 * w * L**4 / (384.0 * E * I)\n\n# Bending stress\nM_max = w * L**2 / 8.0\nc = h / 2.0\nsigma = M_max * c / I\nsigma_MPa = sigma / 1e6\n\n# Mass and cost\nm = rho * A * L\ncost = m * cost_per_kg\n\n# Frequency\nk_eq = 48.0 * E * I / L**3\nm_eff = 0.5 * m\nf = (1.0 / (2.0 * math.pi)) * math.sqrt(k_eq / m_eff)\n\nprint({\n  'max_deflection_m': delta_max,\n  'max_bending_stress_MPa': sigma_MPa,\n  'natural_frequency_Hz': f,\n  'mass_kg': m,\n  'total_cost_USD': cost\n})"
+  }
+}

@@ -36,6 +36,8 @@ async def ask_agent_to_solve(white_agent_url, env, task_index, max_num_steps=30)
     obs = env_reset_res.observation
     info = env_reset_res.info.model_dump()
     reward = 0.0
+    format_failure_count = 0  # Track format failures for metrics
+    max_format_retries = 1  # Allow one retry for format issues
 
     # messages = [
     #     {"role": "system", "content": env.wiki},
@@ -164,9 +166,13 @@ User message: {obs}
         # Handle case where white agent doesn't provide JSON tags
         should_break = False
         parse_failed = False  # Track if parsing actually failed vs successfully handled as final response
+        needs_retry = False  # Track if we need to retry due to format issues
+
         if "json" not in white_tags:
             # Check if this might be a Level C or D final response with ```json code block
             import re
+
+            from src.mechgaia_env.response_parser import extract_json_from_response
 
             json_code_block_match = re.search(
                 r"```json\s*\n(.*?)```", white_text, re.DOTALL
@@ -187,19 +193,75 @@ User message: {obs}
                 should_break = True  # Break after this step (successfully handled)
                 parse_failed = False  # This is successful handling, not a failure
             else:
+                # Check if this is a Level C/D task that should have JSON but doesn't
+                # Try to extract JSON from response and retry if needed
+                parsed_json = extract_json_from_response(white_text)
+
+                if parsed_json is None and format_failure_count < max_format_retries:
+                    # This might be a Level C/D response missing JSON formatting
+                    # Check if response contains design-related keywords
+                    if any(
+                        keyword in white_text.lower()
+                        for keyword in [
+                            "design",
+                            "rationale",
+                            "code",
+                            "height_m",
+                            "frequency",
+                        ]
+                    ):
+                        print(
+                            "@@@ Potential Level C/D response missing JSON formatting. Attempting retry..."
+                        )
+                        format_failure_count += 1
+                        # Send repair message
+                        repair_message = """Your response appears to be missing proper JSON formatting. 
+
+For Level C and Level D tasks, you MUST output your final answer in this exact format:
+
+```json
+{
+  "design": { ... },
+  "rationale": "...",
+  "code": "..."
+}
+```
+
+Please provide your complete answer again, ensuring it is wrapped in ```json code fences."""
+                        # Send repair message and restart loop to get retry response
+                        next_green_message = repair_message
+                        continue  # Skip rest of loop, wait for retry response
+
                 # Try to extract JSON from the response text directly (for tool calls)
-                print(
-                    f"@@@ Warning: White agent response missing JSON tags. Response: {white_text[:200]}..."
-                )
-                json_match = re.search(r'\{[^{}]*"name"[^{}]*\}', white_text, re.DOTALL)
-                if json_match:
-                    try:
-                        action_dict = json.loads(json_match.group(0))
-                        action = Action(**action_dict)
-                        # Successfully parsed - don't break, continue conversation
-                    except (json.JSONDecodeError, ValueError) as e:
-                        print(f"@@@ Error parsing JSON from response: {e}")
-                        # If we can't parse, treat as a respond action
+                if not needs_retry:
+                    print(
+                        f"@@@ Warning: White agent response missing JSON tags. Response: {white_text[:200]}..."
+                    )
+                    json_match = re.search(
+                        r'\{[^{}]*"name"[^{}]*\}', white_text, re.DOTALL
+                    )
+                    if json_match:
+                        try:
+                            action_dict = json.loads(json_match.group(0))
+                            action = Action(**action_dict)
+                            # Successfully parsed - don't break, continue conversation
+                        except (json.JSONDecodeError, ValueError) as e:
+                            print(f"@@@ Error parsing JSON from response: {e}")
+                            format_failure_count += 1
+                            # If we can't parse, treat as a respond action
+                            action = Action(
+                                name=RESPOND_ACTION_NAME,
+                                kwargs={
+                                    "content": white_text  # Use full response text, not truncated
+                                },
+                            )
+                            should_break = True  # Break after this step to prevent infinite retries
+                            parse_failed = True  # This is a parsing failure
+                    else:
+                        # No JSON found - treat as a respond action
+                        print(
+                            "@@@ No JSON found in response. Treating as final response."
+                        )
                         action = Action(
                             name=RESPOND_ACTION_NAME,
                             kwargs={
@@ -207,20 +269,11 @@ User message: {obs}
                             },
                         )
                         should_break = (
-                            True  # Break after this step to prevent infinite retries
+                            True  # Break after this step (successfully handled)
                         )
-                        parse_failed = True  # This is a parsing failure
-                else:
-                    # No JSON found - treat as a respond action
-                    print("@@@ No JSON found in response. Treating as final response.")
-                    action = Action(
-                        name=RESPOND_ACTION_NAME,
-                        kwargs={
-                            "content": white_text  # Use full response text, not truncated
-                        },
-                    )
-                    should_break = True  # Break after this step (successfully handled)
-                    parse_failed = False  # This is successful handling, not a failure
+                        parse_failed = (
+                            False  # This is successful handling, not a failure
+                        )
         else:
             action_json = white_tags["json"]
             try:
@@ -419,6 +472,9 @@ Tool call result:
                 "@@@ Response received but task not marked done yet. Breaking to prevent loop."
             )
             break
+
+    # Add format_failure_count to info for metrics
+    info["format_failure_count"] = format_failure_count
 
     return SolveResult(
         reward=reward,

@@ -126,6 +126,46 @@ IMPORTANT INSTRUCTIONS:
    - Do not include any additional text before or after the ```json code block
    - Ensure your design addresses all steps and system-level constraints
 
+**OUTPUT FORMAT (MANDATORY)**
+
+For Level C and Level D tasks, you MUST follow this exact format:
+
+1. **Level C Output Schema:**
+   - Keys: "design" (dict), "rationale" (string), "code" (string)
+   - "design" must contain: height_m, frequency_Hz, deflection_m, mass_kg, max_stress_MPa, safety_factor (all floats)
+   - "rationale" must be a string (2-6 sentences)
+   - "code" must be valid Python code as a string
+
+2. **Level D Output Schema:**
+   - Keys: "design" (dict), "system_metrics" (dict), "rationale" (string), "code" (string)
+   - "design" must contain span_1 and span_2, each with material (string) and height_m (float)
+   - "system_metrics" must contain: max_deflection_m, max_stress_span_1_MPa, max_stress_span_2_MPa, min_frequency_Hz, total_mass_kg (all floats)
+   - "rationale" must be a string (2-6 sentences)
+   - "code" must be valid Python code as a string
+
+3. **Critical Requirements:**
+   - ALWAYS wrap your JSON output in ```json code fences
+   - ALWAYS output exactly ONE JSON object (not multiple)
+   - ALWAYS include ALL required keys
+   - NEVER output text before or after the JSON block
+   - If you cannot complete a field, use reasonable defaults (e.g., 0.0 for floats, "" for strings)
+
+**Example Level C Output:**
+```json
+{
+  "design": {
+    "height_m": 0.20,
+    "frequency_Hz": 45.2,
+    "deflection_m": 0.0018,
+    "mass_kg": 3.5,
+    "max_stress_MPa": 58.3,
+    "safety_factor": 4.3
+  },
+  "rationale": "Selected height of 0.20 m to optimize frequency while meeting all constraints.",
+  "code": "import math\n# ... your code here ..."
+}
+```
+
 7. **Always**: 
    - Use tools to verify your calculations
    - Provide clear, well-formatted responses

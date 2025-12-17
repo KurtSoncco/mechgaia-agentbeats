@@ -628,3 +628,109 @@ class UnitTestGrader:
             "syntax_correct": 1.0,
             "execution_time": exec_result.get("execution_time", 0),
         }
+
+    def evaluate_level_d_code(
+        self, task_schema: Dict[str, Any], code: str, response: Dict[str, Any]
+    ) -> Dict[str, float]:
+        """Evaluate Level D code execution and system-level constraints.
+
+        Args:
+            task_schema: Level D task schema
+            code: Python code from response
+            response: Full response with design and system_metrics
+
+        Returns:
+            Dictionary with code execution scores and constraint satisfaction
+        """
+        design = response.get("design", {})
+        system_metrics = response.get("system_metrics", {})
+
+        # Execute code with design parameters
+        exec_result = self.sandbox.execute(code, variables=design)
+
+        if exec_result["error"]:
+            return {
+                "code_execution": 0.0,
+                "syntax_correct": 0.0,
+                "system_constraints_satisfied": 0.0,
+                "error": exec_result["error"],
+            }
+
+        # Check if code produces expected outputs
+        result = exec_result["result"]
+        has_output = result is not None or len(exec_result["stdout"]) > 0
+
+        # Check system-level constraints
+        constraints = task_schema.get("constraints", {})
+        constraint_scores = []
+
+        # Check deflection constraint
+        max_deflection = system_metrics.get("max_deflection_m", float("inf"))
+        max_deflection_constraint = constraints.get(
+            "max_deflection_at_nodes_m", float("inf")
+        )
+        if max_deflection <= max_deflection_constraint:
+            constraint_scores.append(1.0)
+        else:
+            constraint_scores.append(0.0)
+
+        # Check mass constraint
+        total_mass = system_metrics.get("total_mass_kg", float("inf"))
+        max_mass_constraint = constraints.get("max_total_mass_kg", float("inf"))
+        if total_mass <= max_mass_constraint:
+            constraint_scores.append(1.0)
+        else:
+            constraint_scores.append(0.0)
+
+        # Check frequency constraint
+        min_frequency = system_metrics.get("min_frequency_Hz", 0.0)
+        min_frequency_constraint = constraints.get("min_natural_frequency_Hz", 0.0)
+        if min_frequency >= min_frequency_constraint:
+            constraint_scores.append(1.0)
+        else:
+            constraint_scores.append(0.0)
+
+        # Check stress constraints
+        max_stress_1 = system_metrics.get("max_stress_span_1_MPa", float("inf"))
+        max_stress_2 = system_metrics.get("max_stress_span_2_MPa", float("inf"))
+
+        # Get material properties for stress limits
+        span_1_material_name = design.get("span_1", {}).get("material", "")
+        span_2_material_name = design.get("span_2", {}).get("material", "")
+
+        material_options = task_schema.get("material_options", [])
+        span_1_material = next(
+            (m for m in material_options if m["name"] == span_1_material_name), None
+        )
+        span_2_material = next(
+            (m for m in material_options if m["name"] == span_2_material_name), None
+        )
+
+        if span_1_material:
+            sigma_y1 = span_1_material.get("sigma_y_MPa", float("inf"))
+            max_stress_limit_1 = sigma_y1 / 1.5
+            if max_stress_1 <= max_stress_limit_1:
+                constraint_scores.append(1.0)
+            else:
+                constraint_scores.append(0.0)
+
+        if span_2_material:
+            sigma_y2 = span_2_material.get("sigma_y_MPa", float("inf"))
+            max_stress_limit_2 = sigma_y2 / 1.5
+            if max_stress_2 <= max_stress_limit_2:
+                constraint_scores.append(1.0)
+            else:
+                constraint_scores.append(0.0)
+
+        system_constraints_satisfied = (
+            sum(constraint_scores) / len(constraint_scores)
+            if constraint_scores
+            else 0.0
+        )
+
+        return {
+            "code_execution": 1.0 if has_output else 0.5,
+            "syntax_correct": 1.0,
+            "system_constraints_satisfied": system_constraints_satisfied,
+            "execution_time": exec_result.get("execution_time", 0),
+        }

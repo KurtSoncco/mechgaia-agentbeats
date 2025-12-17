@@ -1,0 +1,169 @@
+{
+  "id": "level_d_shaft_system_1",
+  "level": "D",
+  "type": "shaft_coupling_system",
+  "title": "Two-segment shaft torsion and bending design",
+  "description": "Design a two-segment shaft transmitting torque to a gear and pulley system. Choose shaft diameters and materials to satisfy torsional shear, bending stress, twist, and mass constraints.",
+  "given": {
+    "geometry": {
+      "segment_1_length_m": 1.2,
+      "segment_2_length_m": 0.8,
+      "gear_location_from_motor_m": 0.8,
+      "pulley_location_from_motor_m": 1.6
+    },
+    "loads": {
+      "torque_Nm": 2500.0,
+      "radial_load_gear_N": 6000.0,
+      "radial_load_pulley_N": 4000.0
+    },
+    "materials": [
+      {
+        "name": "Steel A",
+        "G_Pa": 80e9,
+        "E_Pa": 210e9,
+        "rho_kg_per_m3": 7850.0,
+        "tau_allow_MPa": 80.0,
+        "sigma_allow_MPa": 150.0
+      },
+      {
+        "name": "Steel B",
+        "G_Pa": 80e9,
+        "E_Pa": 210e9,
+        "rho_kg_per_m3": 7850.0,
+        "tau_allow_MPa": 100.0,
+        "sigma_allow_MPa": 180.0
+      }
+    ]
+  },
+  "constraints": {
+    "max_torsional_shear_MPa": "tau_allow",
+    "max_bending_stress_MPa": "sigma_allow",
+    "max_total_twist_rad": 0.01,
+    "max_total_mass_kg": 150.0
+  },
+  "objectives": [
+    "Satisfy torsion, bending, and twist constraints",
+    "Minimize total mass"
+  ],
+  "steps": [
+    {
+      "name": "select_materials_and_diameters",
+      "description": "Choose material and diameters for each shaft segment.",
+      "design_variables": {
+        "segment_1": {
+          "material": {
+            "type": "categorical",
+            "options": [
+              "Steel A",
+              "Steel B"
+            ]
+          },
+          "diameter_m": {
+            "type": "continuous",
+            "bounds": [
+              0.05,
+              0.15
+            ]
+          }
+        },
+        "segment_2": {
+          "material": {
+            "type": "categorical",
+            "options": [
+              "Steel A",
+              "Steel B"
+            ]
+          },
+          "diameter_m": {
+            "type": "continuous",
+            "bounds": [
+              0.05,
+              0.15
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "check_torsion_and_bending",
+      "description": "Compute torsional shear stress, bending stress at gear and pulley, and total twist.",
+      "requires_code": true,
+      "formulas": {
+        "polar_moment": "J = pi d^4 / 32",
+        "torsional_shear": "tau = T * r / J, r = d/2",
+        "bending_moment_gear": "M_gear = radial_load_gear * gear_location",
+        "bending_moment_pulley": "M_pulley = radial_load_pulley * (pulley_location - gear_location)",
+        "bending_stress": "sigma = M * c / I, I = pi d^4 / 64, c = d/2",
+        "twist": "theta = T * L / (G * J)"
+      }
+    },
+    {
+      "name": "mass_evaluation",
+      "description": "Compute total mass of the shaft system.",
+      "requires_code": true,
+      "formulas": {
+        "volume_segment": "V = pi d^2 / 4 * L",
+        "mass_segment": "m = rho * V",
+        "total_mass_kg": "m_total = m1 + m2"
+      }
+    }
+  ],
+  "expected_output_schema": {
+    "design": {
+      "segment_1": {
+        "material": "string",
+        "diameter_m": "float"
+      },
+      "segment_2": {
+        "material": "string",
+        "diameter_m": "float"
+      }
+    },
+    "system_metrics": {
+      "max_torsional_shear_MPa": "float",
+      "max_bending_stress_MPa": "float",
+      "total_twist_rad": "float",
+      "total_mass_kg": "float"
+    },
+    "rationale": "string",
+    "code": "string"
+  },
+  "materials": [
+    {
+      "name": "Steel A",
+      "G_Pa": 80e9,
+      "E_Pa": 210e9,
+      "rho_kg_per_m3": 7850.0,
+      "tau_allow_MPa": 80.0,
+      "sigma_allow_MPa": 150.0
+    },
+    {
+      "name": "Steel B",
+      "G_Pa": 80e9,
+      "E_Pa": 210e9,
+      "rho_kg_per_m3": 7850.0,
+      "tau_allow_MPa": 100.0,
+      "sigma_allow_MPa": 180.0
+    }
+  ],
+  "reference_answer": {
+    "design": {
+      "segment_1": {
+        "material": "Steel B",
+        "diameter_m": 0.11
+      },
+      "segment_2": {
+        "material": "Steel B",
+        "diameter_m": 0.10
+      }
+    },
+    "system_metrics": {
+      "max_torsional_shear_MPa": 78.0,
+      "max_bending_stress_MPa": 145.0,
+      "total_twist_rad": 0.007,
+      "total_mass_kg": 105.0
+    },
+    "rationale": "Selected Steel B for both segments to take advantage of the higher allowable shear and bending stresses, permitting smaller diameters. Diameters of 0.11 m and 0.10 m keep torsional shear stress below the allowable tau_allow and bending stress at the gear and pulley below sigma_allow. The total twist from motor to output is about 0.007 rad, under the 0.01 rad limit, and the total mass of the shaft remains below 120 kg. This design satisfies all torsional, bending, twist, and mass constraints with a relatively light shaft.",
+    "code": "import math\n\n# Geometry\nL1 = 1.2\nL2 = 0.8\ngear_loc = 0.8\npulley_loc = 1.6\n\n# Loads\nT = 2500.0  # Nm\nF_gear = 6000.0  # N\nF_pulley = 4000.0  # N\n\n# Material (Steel B)\nG = 80e9\nE = 210e9\nrho = 7850.0\ntau_allow = 100e6\nsigma_allow = 180e6\n\n# Diameters\nd1 = 0.11\nd2 = 0.10\n\n# Section properties\nJ1 = math.pi * d1**4 / 32.0\nJ2 = math.pi * d2**4 / 32.0\nI1 = math.pi * d1**4 / 64.0\nI2 = math.pi * d2**4 / 64.0\nr1 = d1 / 2.0\nr2 = d2 / 2.0\n\n# Torsional shear\ntau1 = T * r1 / J1\ntau2 = T * r2 / J2\n\n# Bending moments\nM_gear = F_gear * gear_loc\nM_pulley = F_pulley * (pulley_loc - gear_loc)\n\nsigma_gear = M_gear * r1 / I1\nsigma_pulley = M_pulley * r2 / I2\n\nmax_torsional_shear = max(tau1, tau2) / 1e6\nmax_bending_stress = max(sigma_gear, sigma_pulley) / 1e6\n\n# Twist\ntheta1 = T * L1 / (G * J1)\ntheta2 = T * L2 / (G * J2)\n\ntheta_total = theta1 + theta2\n\n# Mass\nV1 = math.pi * d1**2 / 4.0 * L1\nV2 = math.pi * d2**2 / 4.0 * L2\nm1 = rho * V1\nm2 = rho * V2\nm_total = m1 + m2\n\nprint({\n  'max_torsional_shear_MPa': max_torsional_shear,\n  'max_bending_stress_MPa': max_bending_stress,\n  'total_twist_rad': theta_total,\n  'total_mass_kg': m_total\n})"
+  }
+}
