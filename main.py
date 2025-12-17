@@ -5,9 +5,9 @@ import asyncio
 import typer
 from pydantic_settings import BaseSettings
 
-from src.green_agent import start_green_agent
+from src.green_agent.agent import start_green_agent
 from src.launcher import launch_evaluation, launch_remote_evaluation
-from src.white_agent import start_white_agent
+from src.white_agent.agent import start_white_agent
 
 
 class MechgaiaSettings(BaseSettings):
@@ -50,9 +50,30 @@ def launch():
 
 
 @app.command()
-def launch_remote(green_url: str, white_url: str):
-    """Launch the complete evaluation workflow."""
-    asyncio.run(launch_remote_evaluation(green_url, white_url))
+def launch_remote(
+    green_url: str = "http://localhost:9001",
+    white_url: str = "http://localhost:9002",
+    level: str = typer.Option(
+        None, "--level", "-l", help="Single task level (A, B, or C)"
+    ),
+    levels: str = typer.Option(
+        None, "--levels", help="Comma-separated levels (e.g., 'A,B,C')"
+    ),
+    model: str = typer.Option("openai/gpt-4o", "--model", "-m", help="Model name"),
+):
+    """Launch remote evaluation workflow.
+
+    Assumes green and white agents are already running.
+    """
+    levels_list = None
+    if levels:
+        levels_list = [l.strip() for l in levels.split(",")]
+
+    asyncio.run(
+        launch_remote_evaluation(
+            green_url, white_url, level=level, levels=levels_list, model_name=model
+        )
+    )
 
 
 if __name__ == "__main__":

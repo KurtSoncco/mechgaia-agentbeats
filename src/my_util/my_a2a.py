@@ -1,23 +1,31 @@
-import httpx
 import asyncio
 import uuid
 
-
+import httpx
 from a2a.client import A2ACardResolver, A2AClient
 from a2a.types import (
     AgentCard,
-    Part,
-    TextPart,
-    MessageSendParams,
     Message,
+    MessageSendParams,
+    Part,
     Role,
     SendMessageRequest,
     SendMessageResponse,
+    TextPart,
 )
+
+from src.mechgaia_env.config import config
 
 
 async def get_agent_card(url: str) -> AgentCard | None:
-    httpx_client = httpx.AsyncClient()
+    # Configure timeout for agent card retrieval
+    timeout = httpx.Timeout(
+        connect=config.a2a_connect_timeout,
+        read=config.a2a_timeout,
+        write=config.a2a_timeout,
+        pool=config.a2a_connect_timeout,
+    )
+    httpx_client = httpx.AsyncClient(timeout=timeout)
     resolver = A2ACardResolver(httpx_client=httpx_client, base_url=url)
 
     card: AgentCard | None = await resolver.get_agent_card()
@@ -48,7 +56,15 @@ async def send_message(
     url, message, task_id=None, context_id=None
 ) -> SendMessageResponse:
     card = await get_agent_card(url)
-    httpx_client = httpx.AsyncClient(timeout=120.0)
+    # Configure timeout with separate values for connect, read, write, and pool
+    # Use longer timeouts for agent operations that may take time to process
+    timeout = httpx.Timeout(
+        connect=config.a2a_connect_timeout,
+        read=config.a2a_timeout,
+        write=config.a2a_timeout,
+        pool=config.a2a_connect_timeout,
+    )
+    httpx_client = httpx.AsyncClient(timeout=timeout)
     client = A2AClient(httpx_client=httpx_client, agent_card=card)
 
     message_id = uuid.uuid4().hex

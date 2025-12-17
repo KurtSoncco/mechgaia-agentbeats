@@ -4,6 +4,7 @@ import json
 import os
 import time
 import tomllib
+import uuid
 
 import dotenv
 import uvicorn
@@ -16,6 +17,8 @@ from a2a.types import AgentCard, Message, SendMessageSuccessResponse
 from a2a.utils import get_text_parts, new_agent_text_message
 
 from src.mechgaia_env import RESPOND_ACTION_NAME, Action, SolveResult, get_env
+from src.mechgaia_env.database import BenchmarkDatabase
+from src.mechgaia_env.evaluators import LLMJudgeGrader, UnitTestGrader
 from src.my_util import my_a2a, parse_tags
 
 dotenv.load_dotenv()
@@ -44,12 +47,40 @@ async def ask_agent_to_solve(white_agent_url, env, task_index, max_num_steps=30)
     # Specifically, here we provide the tool information for the agent to reply with
     task_description = f"""
 {env.wiki}
+
+**CRITICAL: You MUST use tools to solve problems before providing final answers.**
+
 Here's a list of tools you can use (you can use at most one tool at a time):
 {json.dumps(env.tools_info, indent=2)}
-Please response in the JSON format. Please wrap the JSON part with <json>...</json> tags.
-The JSON should contain:
-- "name": the tool call function name, or "{RESPOND_ACTION_NAME}" if you want to respond directly.
-- "kwargs": the arguments for the tool call, or {{"content": "your message here"}} if you want to respond directly.
+
+**Response Format Requirements:**
+You MUST respond in JSON format, wrapped with <json>...</json> tags.
+
+**Example Tool Call:**
+<json>
+{{"name": "calculator", "kwargs": {{"expression": "100 * 2"}}}}
+</json>
+
+**Example Python Code Execution:**
+<json>
+{{"name": "python_exec", "kwargs": {{"code": "import math\\nresult = math.sqrt(16)\\nprint(result)"}}}}
+</json>
+
+**Example Final Answer (after using tools):**
+<json>
+{{"name": "{RESPOND_ACTION_NAME}", "kwargs": {{"content": "After calculating using the tools, the answer is 4.0 Pa. The calculation was performed using the formula stress = force / area."}}}}
+</json>
+
+**IMPORTANT FOR CALCULATION PROBLEMS:**
+1. First, use calculator or python_exec to perform your calculations
+2. Wait for the tool result
+3. Then provide your final answer using the "respond" action
+4. Your final response MUST clearly state the numerical answer with units (e.g., "The answer is 123.45 Pa" or "Result: 123.45 Pa")
+5. Include both the numerical value AND units in your answer
+
+**JSON Structure:**
+- "name": the tool call function name (calculator, python_exec, get_material_properties), or "{RESPOND_ACTION_NAME}" for final answers
+- "kwargs": the arguments for the tool call, or {{"content": "your message here"}} for final answers
 
 Next, I'll provide you with the user message and tool call results.
 User message: {obs}
@@ -97,13 +128,114 @@ User message: {obs}
         print(f"@@@ White agent response:\n{white_text}")
         # parse the action out
         white_tags = parse_tags(white_text)
-        action_json = white_tags["json"]
-        action_dict = json.loads(action_json)
-        action = Action(**action_dict)
+
+        # Handle case where white agent doesn't provide JSON tags
+        should_break = False
+        if "json" not in white_tags:
+            print(
+                f"@@@ Warning: White agent response missing JSON tags. Response: {white_text[:200]}..."
+            )
+            # Try to extract JSON from the response text directly
+            import re
+
+            json_match = re.search(r'\{[^{}]*"name"[^{}]*\}', white_text, re.DOTALL)
+            if json_match:
+                try:
+                    action_dict = json.loads(json_match.group(0))
+                    action = Action(**action_dict)
+                except (json.JSONDecodeError, ValueError) as e:
+                    print(f"@@@ Error parsing JSON from response: {e}")
+                    # If we can't parse, treat as a respond action
+                    action = Action(
+                        name=RESPOND_ACTION_NAME,
+                        kwargs={
+                            "content": white_text[:1000]
+                        },  # Use the actual response text
+                    )
+                    should_break = (
+                        True  # Break after this step to prevent infinite retries
+                    )
+            else:
+                # No JSON found - treat as a respond action
+                print("@@@ No JSON found in response. Treating as final response.")
+                action = Action(
+                    name=RESPOND_ACTION_NAME,
+                    kwargs={
+                        "content": white_text[:1000]
+                    },  # Use the actual response text
+                )
+                should_break = True  # Break after this step
+        else:
+            action_json = white_tags["json"]
+            try:
+                action_dict = json.loads(action_json)
+                action = Action(**action_dict)
+            except (json.JSONDecodeError, ValueError) as e:
+                print(f"@@@ Error parsing JSON from tags: {e}")
+                # Fallback to respond action
+                action = Action(
+                    name=RESPOND_ACTION_NAME, kwargs={"content": white_text[:1000]}
+                )
+                should_break = True
 
         env_response = env.step(action)
         reward = env_response.reward
-        info = {**info, **env_response.info.model_dump()}
+        info_dict = env_response.info.model_dump()
+        info = {**info, **info_dict}
+
+        # Store the response text for evaluation (from action or info)
+        if action.name == RESPOND_ACTION_NAME:
+            response_text = action.kwargs.get("content", "")
+            info["last_response"] = response_text
+            info["response_text"] = response_text
+            print(
+                f"@@@ Stored response text (length {len(response_text)}): {response_text[:150]}..."
+            )
+        elif "response_text" in info_dict and info_dict.get("response_text"):
+            # Also check if environment stored it
+            stored_text = info_dict.get("response_text", "")
+            info["last_response"] = stored_text
+            info["response_text"] = stored_text
+            print(
+                f"@@@ Stored response text from env (length {len(stored_text)}): {stored_text[:150]}..."
+            )
+        else:
+            # For tool calls, also store the observation in case it contains the final answer
+            # This helps when the agent doesn't provide a final "respond" action
+            if action.name in ["calculator", "python_exec"]:
+                tool_result = env_response.observation
+                # Store tool results for potential answer extraction
+                if "tool_results" not in info:
+                    info["tool_results"] = []
+                info["tool_results"].append(
+                    {
+                        "tool": action.name,
+                        "result": tool_result,
+                        "observation": tool_result,
+                    }
+                )
+                # If this looks like a final answer, also store it as potential response
+                # Check if observation contains a clear numerical result
+                from src.mechgaia_env.response_parser import extract_numerical_answer
+
+                potential_answer = extract_numerical_answer(tool_result)
+                if potential_answer is not None and env_response.done:
+                    # This might be the final answer from tool execution
+                    info["last_response"] = tool_result
+                    info["response_text"] = tool_result
+                    print(
+                        f"@@@ Stored tool result as potential final answer: {tool_result[:150]}..."
+                    )
+
+        # Stop if task is done or if we couldn't parse the response - don't send more messages
+        if env_response.done or should_break:
+            if should_break:
+                print(
+                    "@@@ Could not parse white agent response. Stopping conversation."
+                )
+            else:
+                print("@@@ Task marked as done. Stopping conversation.")
+            break
 
         # instead of maintain history, just prepare the next message with the latest observation
         if action.name != RESPOND_ACTION_NAME:
@@ -112,11 +244,15 @@ Tool call result:
 {env_response.observation}
             """
         else:
-            next_green_message = f"""
-User message:
-{env_response.observation}
-            """
-        if env_response.done:
+            # For respond action, if environment marked it as done, we're finished
+            # Otherwise, the environment should have marked it done
+            if env_response.done:
+                break
+            # If not done yet, don't send another message - wait for environment to mark done
+            # This prevents the loop issue
+            print(
+                "@@@ Response received but task not marked done yet. Breaking to prevent loop."
+            )
             break
 
     return SolveResult(
@@ -128,8 +264,10 @@ User message:
 
 
 class MechgaiaGreenAgentExecutor(AgentExecutor):
-    def __init__(self):
-        pass
+    def __init__(self, db_path: str | None = None):
+        self.db = BenchmarkDatabase(db_path)
+        self.llm_judge = LLMJudgeGrader()
+        self.unit_test_grader = UnitTestGrader()
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         # parse the task
@@ -142,45 +280,326 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
 
         # set up the environment
         print("Green agent: Setting up the environment...")
-        assert len(env_config["task_ids"]) == 1, (
-            "Only single task supported for demo purpose"
-        )
-        task_index = env_config["task_ids"][0]
-        env = get_env(
-            env_name=env_config["env"],
-            user_strategy=env_config["user_strategy"],
-            user_model=env_config["user_model"],
-            task_split=env_config["task_split"],
-            user_provider=env_config.get("user_provider", None),
-            task_index=task_index,
-        )
-        metrics = {}
 
-        print("Green agent: Starting evaluation...")
+        # Support both legacy task_ids and new task_instance_ids
+        task_ids = env_config.get("task_ids", [])
+        task_instance_ids = env_config.get("task_instance_ids", [])
+        level = env_config.get("level")
+        levels = env_config.get("levels", [])  # Support multiple levels
+
+        # Determine which tasks to evaluate
+        if task_instance_ids:
+            instances_to_evaluate = task_instance_ids
+        elif levels:
+            # Evaluate all specified levels - get ALL tasks and instances
+            instances_to_evaluate = []
+            for level in levels:
+                tasks = self.db.get_tasks_by_level(level)
+                print(f"  Found {len(tasks)} tasks for Level {level}")
+                for task in tasks:  # Evaluate ALL tasks for this level
+                    instances = self.db.get_task_instances(task_id=task["id"])
+                    if instances:
+                        # Add all instances for each task, not just the first one
+                        instances_to_evaluate.extend([inst["id"] for inst in instances])
+            print(f"  Total instances to evaluate: {len(instances_to_evaluate)}")
+        elif level:
+            # Get all instances for a single level - evaluate ALL tasks
+            tasks = self.db.get_tasks_by_level(level)
+            instances_to_evaluate = []
+            for task in tasks:  # Evaluate ALL tasks for this level
+                instances = self.db.get_task_instances(task_id=task["id"])
+                if instances:
+                    # Add all instances for each task, not just the first one
+                    instances_to_evaluate.extend([inst["id"] for inst in instances])
+        elif task_ids:
+            # Try to find instances in database first
+            instances_to_evaluate = []
+            all_tasks = (
+                self.db.get_tasks_by_level("A")
+                + self.db.get_tasks_by_level("B")
+                + self.db.get_tasks_by_level("C")
+            )
+
+            for task_id in task_ids:
+                # Check if task_id is a string (database ID) or int (legacy)
+                if isinstance(task_id, str):
+                    # Database task ID - get instances for this specific task
+                    instances = self.db.get_task_instances(task_id=task_id)
+                    if instances:
+                        instances_to_evaluate.extend(
+                            [
+                                inst["id"] for inst in instances[:1]
+                            ]  # First instance per task
+                        )
+                else:
+                    # Legacy integer task_id (e.g., 1, 2, 3)
+                    # Check if database has tasks
+                    if all_tasks:
+                        # Database has tasks - evaluate ALL tasks (not just first one)
+                        # This allows evaluating all generated tasks when legacy IDs are provided
+                        for task in all_tasks:
+                            instances = self.db.get_task_instances(task_id=task["id"])
+                            if instances:
+                                # Take first instance of each task
+                                instances_to_evaluate.append(instances[0]["id"])
+                        # Break after first legacy ID to avoid duplicates
+                        break
+                    # If no tasks in database, will fall through to legacy mode
+
+            # If no instances found, use legacy mode
+            if not instances_to_evaluate:
+                instances_to_evaluate = [None]  # Use legacy mode
+        else:
+            # Fallback to legacy single task
+            instances_to_evaluate = [None]  # Use legacy mode
+
+        metrics = {}
+        all_results = []
+
+        print(f"Green agent: Evaluating {len(instances_to_evaluate)} task instances...")
         timestamp_started = time.time()
-        # TODO: replace
-        # agent = ToolCallingAgent(
-        #     tools_info=env.tools_info,
-        #     wiki=env.wiki,
-        #     model="openai/gpt-4o",
-        #     provider="openai",
-        # )
-        # res = agent.solve(
-        #     env=env,
-        #     task_index=task_index,
-        # )
-        res = await ask_agent_to_solve(white_agent_url, env, task_index)
+
+        model_name = env_config.get("user_model", "unknown")
+
+        for instance_id in instances_to_evaluate:
+            if instance_id is None:
+                # Legacy mode
+                task_index = env_config.get("task_ids", [1])[0]
+                env = get_env(
+                    env_name=env_config["env"],
+                    user_strategy=env_config["user_strategy"],
+                    user_model=env_config["user_model"],
+                    task_split=env_config["task_split"],
+                    user_provider=env_config.get("user_provider", None),
+                    task_index=task_index,
+                )
+                res = await ask_agent_to_solve(white_agent_url, env, task_index)
+                all_results.append({"reward": res.reward, "task_index": task_index})
+            else:
+                # Database mode
+                instance = next(
+                    (i for i in self.db.get_task_instances() if i["id"] == instance_id),
+                    None,
+                )
+                if not instance:
+                    print(f"Warning: Instance {instance_id} not found, skipping")
+                    continue
+
+                # Get task schema
+                tasks = self.db.get_tasks_by_level(instance["level"])
+                task = next((t for t in tasks if t["id"] == instance["task_id"]), None)
+                if not task:
+                    print(f"Warning: Task {instance['task_id']} not found, skipping")
+                    continue
+
+                db_path_str = (
+                    str(self.db.db_path) if hasattr(self.db, "db_path") else None
+                )
+                env = get_env(
+                    env_name=env_config["env"],
+                    task_instance_id=instance_id,
+                    level=instance["level"],
+                    db_path=db_path_str,
+                )
+
+                res = await ask_agent_to_solve(white_agent_url, env, task_index=None)
+
+                # Evaluate response
+                schema_data = (
+                    json.loads(task["schema_data"])
+                    if isinstance(task["schema_data"], str)
+                    else task["schema_data"]
+                )
+
+                # Extract response from agent messages
+                from src.mechgaia_env.response_parser import parse_response
+
+                # Determine task type
+                if instance["level"] == "A":
+                    task_type = "multiple_choice"
+                    num_options = len(schema_data.get("options", []))
+                elif instance["level"] == "B":
+                    task_type = "calculation"
+                    num_options = 0
+                else:  # Level C
+                    task_type = "design"
+                    num_options = 0
+
+                # Get the response text from the result info
+                response_text = res.info.get("last_response", "") or res.info.get(
+                    "response_text", ""
+                )
+
+                if not response_text:
+                    print(
+                        f"Warning: No response text found for instance {instance_id}. Info keys: {list(res.info.keys())}"
+                    )
+                    # Try to get from the SolveResult's info directly
+                    if hasattr(res, "info") and isinstance(res.info, dict):
+                        response_text = res.info.get(
+                            "last_response", ""
+                        ) or res.info.get("response_text", "")
+
+                    # Fallback: Check tool results for potential answers
+                    if not response_text and "tool_results" in res.info:
+                        tool_results = res.info.get("tool_results", [])
+                        # Use the last tool result as potential response
+                        if tool_results:
+                            last_result = tool_results[-1]
+                            response_text = last_result.get(
+                                "result", ""
+                            ) or last_result.get("observation", "")
+                            print(
+                                f"@@@ Using tool result as response text: {response_text[:150]}..."
+                            )
+
+                    if not response_text:
+                        print(
+                            f"Warning: Still no response text. Skipping evaluation for {instance_id}"
+                        )
+                        # Skip evaluation if no response
+                        all_results.append(
+                            {
+                                "instance_id": instance_id,
+                                "reward": 0.0,
+                                "scores": {},
+                                "success": False,
+                                "error": "No response text found",
+                            }
+                        )
+                        continue
+
+                print(
+                    f"@@@ Parsing response for instance {instance_id} (length: {len(response_text)}): {response_text[:100]}..."
+                )
+
+                # Parse the response
+                response = parse_response(response_text, task_type, num_options)
+                print(
+                    f"@@@ Parsed response: selected_option={response.get('selected_option')}, answer={response.get('answer')}"
+                )
+
+                try:
+                    if instance["level"] == "A":
+                        print("@@@ Evaluating Level A task with MEJ (LLM judge)...")
+                        scores = self.llm_judge.evaluate_level_a(schema_data, response)
+                        print(f"@@@ MEJ scores: {scores}")
+                    elif instance["level"] == "B":
+                        print("@@@ Evaluating Level B task with unit test grader...")
+                        unit_test_scores = self.unit_test_grader.evaluate_level_b(
+                            schema_data,
+                            instance["parameters"],
+                            instance["gold_answer"],
+                            response,
+                        )
+                        print(f"@@@ Unit test grader scores: {unit_test_scores}")
+
+                        # Also evaluate with MEJ for qualitative assessment
+                        print("@@@ Evaluating Level B task with MEJ (LLM judge)...")
+                        mej_scores = self.llm_judge.evaluate_level_b(
+                            schema_data,
+                            instance["parameters"],
+                            instance["gold_answer"],
+                            response,
+                        )
+                        print(f"@@@ MEJ scores: {mej_scores}")
+
+                        # Combine both evaluations
+                        scores = {**unit_test_scores, **mej_scores}
+                    else:  # Level C
+                        print("@@@ Evaluating Level C task with MEJ (LLM judge)...")
+                        scores = self.llm_judge.evaluate_level_c(schema_data, response)
+                        print(f"@@@ MEJ scores: {scores}")
+                except Exception as e:
+                    print(f"@@@ Error during evaluation: {e}")
+                    import traceback
+
+                    traceback.print_exc()
+                    scores = {"error": str(e)}
+
+                # Store evaluation
+                eval_id = str(uuid.uuid4())
+                self.db.add_evaluation(
+                    eval_id=eval_id,
+                    task_instance_id=instance_id,
+                    model_name=model_name,
+                    response=response,
+                    scores=scores,
+                )
+
+                # Determine success based on scores, not just environment reward
+                # For Level A: correctness > 0.5 OR overall_score > 0.7 OR technical_accuracy > 0.7
+                # For Level B: (correctness > 0.9 AND value_tolerance == 1.0) OR MEJ_overall > 0.7
+                #   (quantitative correctness OR qualitative MEJ evaluation)
+                # For Level C: overall_score > 0.7
+                if instance["level"] == "A":
+                    correctness = scores.get("correctness", 0)
+                    overall_score = scores.get("overall_score", 0)
+                    technical_accuracy = scores.get("technical_accuracy", 0)
+                    success = (
+                        correctness > 0.5
+                        or overall_score > 0.7
+                        or technical_accuracy > 0.7
+                    )
+                    print(
+                        f"@@@ Level A evaluation: correctness={correctness:.2f}, overall={overall_score:.2f}, technical={technical_accuracy:.2f}, success={success}"
+                    )
+                elif instance["level"] == "B":
+                    correctness = scores.get("correctness", 0)
+                    value_tolerance = scores.get("value_tolerance", 0)
+                    mej_overall = scores.get("mej_overall_score", 0)
+
+                    # Success criteria: quantitative correctness OR high MEJ score
+                    # Quantitative: correctness > 0.9 AND value_tolerance == 1.0 (within tolerance)
+                    # Qualitative: MEJ overall score > 0.6 (moderate engineering judgment)
+                    #   OR correctness > 0.5 (partial credit for close answers)
+                    quantitative_pass = correctness > 0.9 and value_tolerance >= 1.0
+                    qualitative_pass = mej_overall > 0.6
+                    partial_credit = (
+                        correctness > 0.5
+                    )  # Give partial credit for close answers
+                    success = quantitative_pass or qualitative_pass or partial_credit
+
+                    print(
+                        f"@@@ Level B evaluation: correctness={correctness:.2f}, value_tolerance={value_tolerance:.2f}, "
+                        f"MEJ_overall={mej_overall:.2f}, quantitative_pass={quantitative_pass}, "
+                        f"qualitative_pass={qualitative_pass}, partial_credit={partial_credit}, success={success}"
+                    )
+                else:  # Level C
+                    overall_score = scores.get("overall_score", 0)
+                    success = overall_score > 0.7
+                    print(
+                        f"@@@ Level C evaluation: overall_score={overall_score:.2f}, success={success}"
+                    )
+
+                all_results.append(
+                    {
+                        "instance_id": instance_id,
+                        "reward": 1.0 if success else 0.0,
+                        "scores": scores,
+                        "success": success,
+                    }
+                )
 
         metrics["time_used"] = time.time() - timestamp_started
-        result_bool = metrics["success"] = res.reward == 1
-        result_emoji = "✅" if result_bool else "❌"
+        metrics["num_tasks"] = len(instances_to_evaluate)
+        metrics["success_rate"] = (
+            sum(1 for r in all_results if r.get("success", False)) / len(all_results)
+            if all_results
+            else 0
+        )
+
+        result_emoji = "✅" if metrics["success_rate"] > 0.5 else "❌"
 
         print("Green agent: Evaluation complete.")
         await event_queue.enqueue_event(
             new_agent_text_message(
-                f"Finished. White agent success: {result_emoji}\nMetrics: {metrics}\n"
+                f"Finished. Evaluation results: {result_emoji}\n"
+                f"Success rate: {metrics['success_rate']:.2%}\n"
+                f"Tasks evaluated: {metrics['num_tasks']}\n"
+                f"Time: {metrics['time_used']:.2f}s\n"
             )
-        )  # alternative, impl as a task-generating agent
+        )
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
         raise NotImplementedError

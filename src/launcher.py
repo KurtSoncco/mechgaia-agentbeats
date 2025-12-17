@@ -33,14 +33,38 @@ async def launch_evaluation():
 
     # send the task description
     print("Sending task description to green agent...")
-    task_config = {
-        "env": "mechgaia",
-        "user_strategy": "llm",
-        "user_model": "openai/gpt-4o",
-        "user_provider": "openai",
-        "task_split": "test",
-        "task_ids": [1],
-    }
+
+    # Check if database has tasks - if so, use level-based evaluation
+    # Otherwise fall back to legacy mode
+    from src.mechgaia_env.database import BenchmarkDatabase
+
+    db = BenchmarkDatabase()
+    level_b_tasks = db.get_tasks_by_level("B")
+
+    if level_b_tasks:
+        # Database has Level B tasks - evaluate only Level B
+        print(f"Found {len(level_b_tasks)} Level B tasks in database.")
+        print("Evaluating Level B tasks...")
+        task_config = {
+            "env": "mechgaia",
+            "user_strategy": "llm",
+            "user_model": "openai/gpt-4o",
+            "user_provider": "openai",
+            "task_split": "test",
+            # Evaluate only Level B
+            "levels": ["B"],
+        }
+    else:
+        # No tasks in database - use legacy mode
+        print("No tasks in database. Using legacy mode.")
+        task_config = {
+            "env": "mechgaia",
+            "user_strategy": "llm",
+            "user_model": "openai/gpt-4o",
+            "user_provider": "openai",
+            "task_split": "test",
+            "task_ids": [1],  # Legacy mode
+        }
     task_text = f"""
 Your task is to instantiate MechGaia to test the agent located at:
 <white_agent_url>
@@ -66,15 +90,42 @@ You should use the following env configuration:
     print("Agents terminated.")
 
 
-async def launch_remote_evaluation(green_url: str, white_url: str):
+async def launch_remote_evaluation(
+    green_url: str,
+    white_url: str,
+    level: str | None = None,
+    levels: list[str] | None = None,
+    task_instance_ids: list[str] | None = None,
+    model_name: str = "openai/gpt-4o",
+):
+    """Launch remote evaluation with configurable parameters.
+
+    Args:
+        green_url: URL of the green agent (evaluator)
+        white_url: URL of the white agent (being tested)
+        level: Single task level to evaluate (A, B, or C). If None, uses levels, task_instance_ids or legacy mode
+        levels: List of task levels to evaluate (e.g., ["A", "B", "C"]). Takes precedence over level
+        task_instance_ids: Specific task instance IDs to evaluate
+        model_name: Model name for tracking in results
+    """
     task_config = {
         "env": "mechgaia",
         "user_strategy": "llm",
-        "user_model": "openai/gpt-4o",
+        "user_model": model_name,
         "user_provider": "openai",
         "task_split": "test",
-        "task_ids": [1],
     }
+
+    # Add levels, level, or task_instance_ids if provided
+    if levels:
+        task_config["levels"] = levels
+    elif level:
+        task_config["level"] = level
+    elif task_instance_ids:
+        task_config["task_instance_ids"] = task_instance_ids
+    else:
+        # Legacy fallback
+        task_config["task_ids"] = [1]
     task_text = f"""
 Your task is to instantiate MechGaia to test the agent located at:
 <white_agent_url>
@@ -86,6 +137,14 @@ You should use the following env configuration:
 </env_config>
     """
     print("Sending task description to green agent...")
-    response = await my_a2a.send_message(green_url, task_text)
-    print("Response from green agent:")
-    print(response)
+    print(f"Task config: {json.dumps(task_config, indent=2)}")
+    try:
+        response = await my_a2a.send_message(green_url, task_text)
+        print("Response from green agent:")
+        print(response)
+    except Exception:
+        print(f"Error: Failed to connect to green agent at {green_url}")
+        print("Make sure the green agent is running. Start it with:")
+        print("  python main.py green")
+        print("Or use 'python main.py launch' to start both agents automatically.")
+        raise

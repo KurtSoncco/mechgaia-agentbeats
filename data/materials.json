@@ -1,0 +1,42 @@
+{
+  "steel": {
+    "name": "Steel (AISI 1020)",
+    "youngs_modulus": 200000000000,
+    "yield_strength": 350000000,
+    "ultimate_strength": 420000000,
+    "density": 7850,
+    "poissons_ratio": 0.3,
+    "thermal_expansion": 0.000012,
+    "class": "metal"
+  },
+  "aluminum": {
+    "name": "Aluminum 6061",
+    "youngs_modulus": 69000000000,
+    "yield_strength": 276000000,
+    "ultimate_strength": 310000000,
+    "density": 2700,
+    "poissons_ratio": 0.33,
+    "thermal_expansion": 0.000023,
+    "class": "metal"
+  },
+  "titanium": {
+    "name": "Titanium Grade 5",
+    "youngs_modulus": 110000000000,
+    "yield_strength": 880000000,
+    "ultimate_strength": 950000000,
+    "density": 4500,
+    "poissons_ratio": 0.34,
+    "thermal_expansion": 0.0000086,
+    "class": "metal"
+  },
+  "composite": {
+    "name": "Carbon Fiber Composite",
+    "youngs_modulus": 70000000000,
+    "yield_strength": 600000000,
+    "ultimate_strength": 800000000,
+    "density": 1600,
+    "poissons_ratio": 0.3,
+    "thermal_expansion": 0.000002,
+    "class": "composite"
+  }
+}
