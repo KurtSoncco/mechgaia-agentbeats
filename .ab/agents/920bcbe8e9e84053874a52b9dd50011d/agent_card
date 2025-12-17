@@ -1,0 +1,46 @@
+{
+  "additionalInterfaces": null,
+  "capabilities": {
+    "extensions": null,
+    "pushNotifications": null,
+    "stateTransitionHistory": null,
+    "streaming": false
+  },
+  "defaultInputModes": [
+    "text"
+  ],
+  "defaultOutputModes": [
+    "text"
+  ],
+  "description": "The assessment hosting agent for tau-bench.",
+  "documentationUrl": null,
+  "iconUrl": null,
+  "name": "tau_green_agent",
+  "preferredTransport": "JSONRPC",
+  "protocolVersion": "0.3.0",
+  "provider": null,
+  "security": null,
+  "securitySchemes": null,
+  "signatures": null,
+  "skills": [
+    {
+      "description": "Assess the tool-calling ability of an agent.\n",
+      "examples": [
+        "    \nYour task is to instantiate tau-bench to test the agent located at:\n<white_agent_url>\nhttp://localhost:9002/\n</white_agent_url>\nYou should use the following env configuration:\n<env_config>\n{\n  \"env\": \"retail\",\n  \"user_strategy\": \"llm\",\n  \"user_model\": \"openai/gpt-4o\",\n  \"user_provider\": \"openai\",\n  \"task_split\": \"test\",\n  \"task_ids\": [\n    1\n  ]\n}\n</env_config>\n    "
+      ],
+      "id": "host_assess_tau_bench",
+      "inputModes": null,
+      "name": "Tau-bench assessment hosting",
+      "outputModes": null,
+      "security": null,
+      "tags": [
+        "green agent",
+        "assessment hosting",
+        "tau-bench"
+      ]
+    }
+  ],
+  "supportsAuthenticatedExtendedCard": null,
+  "url": "https://green.mechgaia.org/to_agent/920bcbe8e9e84053874a52b9dd50011d",
+  "version": "0.1.0"
+}
