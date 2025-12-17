@@ -1,10 +1,11 @@
 """Launcher module - initiates and coordinates the evaluation process."""
 
-import multiprocessing
 import json
+import multiprocessing
+
 from src.green_agent.agent import start_green_agent
-from src.white_agent.agent import start_white_agent
 from src.my_util import my_a2a
+from src.white_agent.agent import start_white_agent
 
 
 async def launch_evaluation():
@@ -13,7 +14,7 @@ async def launch_evaluation():
     green_address = ("localhost", 9001)
     green_url = f"http://{green_address[0]}:{green_address[1]}"
     p_green = multiprocessing.Process(
-        target=start_green_agent, args=("tau_green_agent", *green_address)
+        target=start_green_agent, args=("mechgaia_green_agent", *green_address)
     )
     p_green.start()
     assert await my_a2a.wait_agent_ready(green_url), "Green agent not ready in time"
@@ -49,7 +50,7 @@ async def launch_evaluation():
         "task_ids": [1],
     }
     task_text = f"""
-Your task is to instantiate tau-bench to test the agent located at:
+Your task is to instantiate MechGaia to test the agent located at:
 <white_agent_url>
 http://{white_address[0]}:{white_address[1]}/
 </white_agent_url>
@@ -83,7 +84,7 @@ async def launch_remote_evaluation(green_url: str, white_url: str):
         "task_ids": [1],
     }
     task_text = f"""
-Your task is to instantiate tau-bench to test the agent located at:
+Your task is to instantiate MechGaia to test the agent located at:
 <white_agent_url>
 {white_url}
 </white_agent_url>

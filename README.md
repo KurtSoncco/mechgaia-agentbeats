@@ -1,6 +1,6 @@
-# Agentify Example: Tau-Bench
+# MechGaia AgentBeats
 
-Example code for agentifying Tau-Bench using A2A and MCP standards.
+MechGaia agent assessment framework using A2A and MCP standards.
 
 ## Project Structure
 

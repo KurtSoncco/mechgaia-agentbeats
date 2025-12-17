@@ -1,23 +1,25 @@
 """Green agent implementation - manages assessment and evaluation."""
 
-import uvicorn
-import tomllib
-import dotenv
 import json
-import time
 import os
-from a2a.server.apps import A2AStarletteApplication
-from a2a.server.request_handlers import DefaultRequestHandler
+import time
+import tomllib
+
+import dotenv
+import uvicorn
 from a2a.server.agent_execution import AgentExecutor, RequestContext
+from a2a.server.apps import A2AStarletteApplication
 from a2a.server.events import EventQueue
+from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
-from a2a.types import AgentCard, SendMessageSuccessResponse, Message
-from a2a.utils import new_agent_text_message, get_text_parts
-from src.my_util import parse_tags, my_a2a
+from a2a.types import AgentCard, Message, SendMessageSuccessResponse
+from a2a.utils import get_text_parts, new_agent_text_message
 
 # from tau_bench.agents.tool_calling_agent import ToolCallingAgent
 from tau_bench.envs import get_env
-from tau_bench.types import SolveResult, RESPOND_ACTION_NAME, Action
+from tau_bench.types import RESPOND_ACTION_NAME, Action, SolveResult
+
+from src.my_util import my_a2a, parse_tags
 
 dotenv.load_dotenv()
 
@@ -129,7 +131,7 @@ User message:
     )
 
 
-class TauGreenAgentExecutor(AgentExecutor):
+class MechgaiaGreenAgentExecutor(AgentExecutor):
     def __init__(self):
         pass
 
@@ -189,7 +191,7 @@ class TauGreenAgentExecutor(AgentExecutor):
         raise NotImplementedError
 
 
-def start_green_agent(agent_name="tau_green_agent", host="localhost", port=9001):
+def start_green_agent(agent_name="mechgaia_green_agent", host="localhost", port=9001):
     print("Starting green agent...")
     agent_card_dict = load_agent_card_toml(agent_name)
 
@@ -200,7 +202,7 @@ def start_green_agent(agent_name="tau_green_agent", host="localhost", port=9001)
     agent_card_dict["url"] = os.getenv("AGENT_URL")
 
     request_handler = DefaultRequestHandler(
-        agent_executor=TauGreenAgentExecutor(),
+        agent_executor=MechgaiaGreenAgentExecutor(),
         task_store=InMemoryTaskStore(),
     )
 

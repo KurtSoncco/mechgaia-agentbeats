@@ -1,21 +1,22 @@
-"""CLI entry point for agentify-example-tau-bench."""
+"""CLI entry point for mechgaia-agentbeats."""
 
-import typer
 import asyncio
 
-from src.green_agent import start_green_agent
-from src.white_agent import start_white_agent
-from src.launcher import launch_evaluation, launch_remote_evaluation
+import typer
 from pydantic_settings import BaseSettings
 
+from src.green_agent import start_green_agent
+from src.launcher import launch_evaluation, launch_remote_evaluation
+from src.white_agent import start_white_agent
 
-class TaubenchSettings(BaseSettings):
+
+class MechgaiaSettings(BaseSettings):
     role: str = "unspecified"
     host: str = "127.0.0.1"
     agent_port: int = 9000
 
 
-app = typer.Typer(help="Agentified Tau-Bench - Standardized agent assessment framework")
+app = typer.Typer(help="MechGaia AgentBeats - Standardized agent assessment framework")
 
 
 @app.command()
@@ -32,7 +33,7 @@ def white():
 
 @app.command()
 def run():
-    settings = TaubenchSettings()
+    settings = MechgaiaSettings()
     if settings.role == "green":
         start_green_agent(host=settings.host, port=settings.agent_port)
     elif settings.role == "white":
