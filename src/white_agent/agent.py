@@ -2,6 +2,7 @@
 
 import os
 import sys
+import tomllib
 
 import dotenv
 import uvicorn
@@ -10,32 +11,17 @@ from a2a.server.apps import A2AStarletteApplication
 from a2a.server.events import EventQueue
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
-from a2a.types import AgentCapabilities, AgentCard, AgentSkill
+from a2a.types import AgentCard
 from a2a.utils import new_agent_text_message
 from litellm import completion
 
 dotenv.load_dotenv()
 
 
-def prepare_white_agent_card(url):
-    skill = AgentSkill(
-        id="task_fulfillment",
-        name="Task Fulfillment",
-        description="Handles user requests and completes tasks",
-        tags=["general"],
-        examples=[],
-    )
-    card = AgentCard(
-        name="general_white_agent",
-        description="A general-purpose white agent for task fulfillment.",
-        url=url,
-        version="1.0.0",
-        default_input_modes=["text/plain"],
-        default_output_modes=["text/plain"],
-        capabilities=AgentCapabilities(),
-        skills=[skill],
-    )
-    return card
+def load_agent_card_toml(agent_name):
+    current_dir = __file__.rsplit("/", 1)[0]
+    with open(f"{current_dir}/{agent_name}.toml", "rb") as f:
+        return tomllib.load(f)
 
 
 class GeneralWhiteAgentExecutor(AgentExecutor):
@@ -226,6 +212,7 @@ For Level C and Level D tasks, you MUST follow this exact format:
 
 def start_white_agent(agent_name="general_white_agent", host="localhost", port=9002):
     print("Starting white agent...")
+    agent_card_dict = load_agent_card_toml(agent_name)
 
     # Debug: Print environment variables
     print("[DEBUG] Environment variables:", file=sys.stderr)
@@ -271,7 +258,7 @@ def start_white_agent(agent_name="general_white_agent", host="localhost", port=9
         print(f"[DEBUG] Using default localhost URL: {agent_card_url}", file=sys.stderr)
 
     print(f"[DEBUG] Final agent_card URL: {agent_card_url}", file=sys.stderr)
-    card = prepare_white_agent_card(agent_card_url)
+    agent_card_dict["url"] = agent_card_url
 
     request_handler = DefaultRequestHandler(
         agent_executor=GeneralWhiteAgentExecutor(),
@@ -279,7 +266,7 @@ def start_white_agent(agent_name="general_white_agent", host="localhost", port=9
     )
 
     app = A2AStarletteApplication(
-        agent_card=card,
+        agent_card=AgentCard(**agent_card_dict),
         http_handler=request_handler,
     )
 

@@ -499,9 +499,87 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
         print("Green agent: Received a task, parsing...")
         user_input = context.get_user_input()
         tags = parse_tags(user_input)
+
+        # Validate required tags
+        if "white_agent_url" not in tags:
+            error_msg = """Missing required tag 'white_agent_url' in task description.
+
+Expected format:
+<white_agent_url>
+http://localhost:9002/
+</white_agent_url>
+<env_config>
+{
+  "env": "mechgaia",
+  "user_strategy": "llm",
+  "user_model": "openai/gpt-4o",
+  "user_provider": "openai",
+  "task_split": "test",
+  "task_instance_ids": ["level_c_1_instance_1"]
+}
+</env_config>"""
+            print(f"Error: {error_msg}")
+            await event_queue.enqueue_event(
+                new_agent_text_message(f"Error: {error_msg}")
+            )
+            return
+
         white_agent_url = tags["white_agent_url"]
-        env_config_str = tags["env_config"]
-        env_config = json.loads(env_config_str)
+
+        # env_config is optional - if missing, use default (single Level C instance)
+        # Note: API keys are handled via environment variables (e.g., OPENAI_API_KEY),
+        # not through env_config. The env_config contains model/provider info for tracking.
+        if "env_config" not in tags:
+            print("No env_config provided. Using default: single Level C instance.")
+            # Default to a single Level C instance (same as launch_remote_evaluation)
+            # Includes default model/provider for tracking purposes
+            tasks = self.db.get_tasks_by_level("C")
+            if tasks:
+                instances = self.db.get_task_instances(task_id=tasks[0]["id"])
+                if instances:
+                    single_instance_id = instances[0]["id"]
+                    print(f"Using default Level C instance: {single_instance_id}")
+                    env_config = {
+                        "env": "mechgaia",
+                        "user_strategy": "llm",
+                        "user_model": "openai/gpt-4o",  # Used for tracking in database
+                        "user_provider": "openai",  # Used for tracking/provider selection
+                        "task_split": "test",
+                        "task_instance_ids": [single_instance_id],
+                    }
+                else:
+                    print(
+                        "Warning: No instances found for Level C tasks. Using legacy mode."
+                    )
+                    env_config = {
+                        "env": "mechgaia",
+                        "user_strategy": "llm",
+                        "user_model": "openai/gpt-4o",
+                        "user_provider": "openai",
+                        "task_split": "test",
+                        "task_ids": [1],  # Legacy mode
+                    }
+            else:
+                print("Warning: No Level C tasks found. Using legacy mode.")
+                env_config = {
+                    "env": "mechgaia",
+                    "user_strategy": "llm",
+                    "user_model": "openai/gpt-4o",
+                    "user_provider": "openai",
+                    "task_split": "test",
+                    "task_ids": [1],  # Legacy mode
+                }
+        else:
+            env_config_str = tags["env_config"]
+            try:
+                env_config = json.loads(env_config_str)
+            except json.JSONDecodeError as e:
+                error_msg = f"Failed to parse env_config JSON: {e}"
+                print(f"Error: {error_msg}")
+                await event_queue.enqueue_event(
+                    new_agent_text_message(f"Error: {error_msg}")
+                )
+                return
 
         # set up the environment
         print("Green agent: Setting up the environment...")

@@ -1,14 +1,41 @@
 name = "general_white_agent"
-description = "A general-purpose white agent for task fulfillment."
+description = "White agent for executing MechGaia benchmark cases."
 version = "1.0.0"
 
 defaultInputModes = ["text/plain"]
 defaultOutputModes = ["text/plain"]
 [capabilities]
-streaming = false
 
 [[skills]]
-id = "task_fulfillment"
-name = "Task Fulfillment"
-description = "Handles user requests and completes tasks"
-tags = ["general"]
+id = "mechgaia_benchmark_executor"
+name = "MechGaia benchmark executor"
+description = """
+Receives mechanical engineering problems from the green agent and solves them using available tools (calculator, python_exec). 
+
+The agent handles multiple problem types:
+- Level A: Multiple choice questions requiring analysis and reasoning
+- Level B: Calculation problems requiring numerical answers with units
+- Level C: Design problems requiring JSON output with design parameters, rationale, and verification code
+- Level D: Multi-step design problems requiring system-level design decisions
+
+All responses must use tools for calculations before providing final answers, and must be formatted as JSON wrapped in <json>...</json> tags for tool calls, or as ```json code blocks for final design responses.
+"""
+tags = ["mechgaia", "benchmark", "white agent"]
+examples = ["""
+Solve this mechanical engineering problem:
+
+**Problem:**
+A cantilever beam with length L = 1.0 m, width b = 0.05 m, and height h = 0.20 m is made of steel (E = 210 GPa, ρ = 7850 kg/m³). A point load P = 100 N is applied at the free end.
+
+Calculate the maximum deflection at the free end.
+
+**Available tools:**
+- calculator: Perform arithmetic calculations
+- python_exec: Execute Python code for complex calculations
+
+**Response format:**
+Use tools to calculate, then provide your final answer in JSON format:
+<json>
+{"name": "respond", "kwargs": {"content": "The maximum deflection is X.XX m."}}
+</json>
+"""]

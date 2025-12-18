@@ -194,7 +194,7 @@ async def launch_remote_evaluation(
     Args:
         green_url: URL of the green agent (evaluator)
         white_url: URL of the white agent (being tested)
-        level: Single task level to evaluate (A, B, C, or D). If None, uses levels, task_instance_ids or legacy mode
+        level: Single task level to evaluate (A, B, C, or D). If None, uses levels, task_instance_ids or defaults to single Level C instance
         levels: List of task levels to evaluate (e.g., ["A", "B", "C", "D"]). Takes precedence over level
         task_instance_ids: Specific task instance IDs to evaluate
         model_name: Model name for tracking in results
@@ -215,8 +215,29 @@ async def launch_remote_evaluation(
     elif task_instance_ids:
         task_config["task_instance_ids"] = task_instance_ids
     else:
-        # Legacy fallback
-        task_config["task_ids"] = [1]
+        # Default: Check database for a single Level C instance (same as launch_evaluation)
+        print("No level specified. Defaulting to one instance of Level C for testing.")
+        from src.mechgaia_env.database import BenchmarkDatabase
+
+        db = BenchmarkDatabase()
+        tasks = db.get_tasks_by_level("C")
+        if tasks:
+            print(f"Found {len(tasks)} Level C tasks in database.")
+            # Get instances for the first task
+            instances = db.get_task_instances(task_id=tasks[0]["id"])
+            if instances:
+                # Use only the first instance
+                single_instance_id = instances[0]["id"]
+                print(f"Using single Level C instance: {single_instance_id}")
+                task_config["task_instance_ids"] = [single_instance_id]
+            else:
+                print(
+                    "Warning: No instances found for Level C tasks. Using legacy mode."
+                )
+                task_config["task_ids"] = [1]  # Legacy mode
+        else:
+            print("Warning: No Level C tasks found. Using legacy mode.")
+            task_config["task_ids"] = [1]  # Legacy mode
     task_text = f"""
 Your task is to instantiate MechGaia to test the agent located at:
 <white_agent_url>

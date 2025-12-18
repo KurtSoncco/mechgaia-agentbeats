@@ -12,10 +12,28 @@ id = "host_assess_mechgaia"
 name = "MechGaia assessment hosting"
 description = """
 Assess the tool-calling ability of an agent.
+
+Required: <white_agent_url> tag with the URL of the agent to test.
+Optional: <env_config> tag with JSON configuration. If omitted, defaults to a single Level C instance.
+
+env_config fields:
+- "env": "mechgaia" (required if env_config provided)
+- "user_model": "openai/gpt-4o" - model name for tracking (defaults to "openai/gpt-4o")
+- "user_provider": "openai" - provider name (defaults to "openai")
+- "user_strategy": "llm" (defaults to "llm")
+- "task_split": "test" (defaults to "test")
+
+Task selection (one of):
+- "task_instance_ids": ["id1", "id2"] - evaluate specific instances
+- "levels": ["A", "B", "C", "D"] - evaluate all instances for specified levels
+- "level": "C" - evaluate all instances for a single level
+- "task_ids": [1, 2] - legacy mode with integer task IDs
+
+If env_config is omitted, defaults to single Level C instance with model "openai/gpt-4o".
 """
 tags = ["green agent", "assessment hosting", "mechgaia"]
 examples = ["""    
-Your task is to instantiate MechGaia to test the agent located at:
+Your task is to assess the agents located at:
 <white_agent_url>
 http://localhost:9002/
 </white_agent_url>
@@ -27,9 +45,9 @@ You should use the following env configuration:
   "user_model": "openai/gpt-4o",
   "user_provider": "openai",
   "task_split": "test",
-  "task_ids": [
-    1
-  ]
+  "task_instance_ids": ["level_c_1_instance_1"]
 }
 </env_config>
+
+Note: If env_config is omitted, the agent will default to evaluating a single Level C instance.
     """]
