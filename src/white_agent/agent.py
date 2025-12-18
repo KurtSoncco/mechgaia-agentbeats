@@ -260,20 +260,11 @@ def start_white_agent(agent_name="general_white_agent", host="localhost", port=9
             )
 
     if agent_url:
-        agent_url = agent_url.rstrip("/")
-        # If AGENT_URL contains /to_agent/ path, strip it for the agent card URL
-        # The agent card URL should be the base URL, not include routing paths
-        if "/to_agent/" in agent_url:
-            # Extract base URL (protocol + domain) up to /to_agent/
-            agent_card_url = agent_url.split("/to_agent/")[0]
-            print(
-                f"[DEBUG] Stripped /to_agent/ path from agent_url. Using base URL: {agent_card_url}",
-                file=sys.stderr,
-            )
-        else:
-            # If AGENT_URL is set (by controller or environment), use it as-is
-            agent_card_url = agent_url
-            print(f"[DEBUG] Using agent_card_url: {agent_card_url}", file=sys.stderr)
+        # Strip trailing slashes to prevent double slashes
+        # Note: /to_agent/<agent-id> path handling is done by earthshaker/controller
+        # We preserve the full URL as-is (including /to_agent/ paths) and just remove trailing slashes
+        agent_card_url = agent_url.rstrip("/")
+        print(f"[DEBUG] Using agent_card_url: {agent_card_url}", file=sys.stderr)
     else:
         # Default to localhost for local development
         agent_card_url = f"http://{host}:{port}"

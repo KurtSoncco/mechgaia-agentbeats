@@ -19,18 +19,10 @@ from src.mechgaia_env.config import config
 
 async def get_agent_card(url: str) -> AgentCard | None:
     # Configure timeout for agent card retrieval
-    # Normalize URL to prevent double slashes when A2ACardResolver adds paths
-    # Strip trailing slashes first
+    # Strip trailing slashes to prevent double slashes when A2ACardResolver adds paths
+    # Note: /to_agent/<agent-id> path handling is done by earthshaker/controller
+    # We preserve the full URL as-is (including /to_agent/ paths) and just remove trailing slashes
     url = url.rstrip("/")
-    # If URL contains /to_agent/ path, we need to handle it specially
-    # The agent card should be accessible at the base URL with /.well-known/agent-card.json
-    # So we extract just the base domain + protocol
-    if "/to_agent/" in url:
-        # Extract base URL (protocol + domain) up to /to_agent/
-        # This handles routing paths added by deployment infrastructure
-        parts = url.split("/to_agent/")
-        base_url = parts[0]
-        url = base_url.rstrip("/")
     timeout = httpx.Timeout(
         connect=config.a2a_connect_timeout,
         read=config.a2a_timeout,

@@ -1,6 +1,7 @@
 """CLI entry point for mechgaia-agentbeats."""
 
 import asyncio
+import os
 
 import typer
 from pydantic_settings import BaseSettings
@@ -14,6 +15,26 @@ class MechgaiaSettings(BaseSettings):
     role: str = "unspecified"
     host: str = "127.0.0.1"
     agent_port: int = 9000
+
+    class Config:
+        env_prefix = ""  # No prefix, read ROLE, HOST, AGENT_PORT directly
+        case_sensitive = False
+
+    def get_port(self) -> int:
+        """Get the port to use, considering PORT env var (Cloud Run) and role-based defaults."""
+        # Cloud Run sets PORT environment variable - prioritize this
+        port_env = os.getenv("PORT")
+        if port_env:
+            return int(port_env)
+
+        # Role-based defaults
+        if self.role == "green":
+            return 9001
+        elif self.role == "white":
+            return 9002
+
+        # Fallback to configured agent_port
+        return self.agent_port
 
 
 app = typer.Typer(help="MechGaia AgentBeats - Standardized agent assessment framework")
@@ -32,14 +53,36 @@ def white():
 
 
 @app.command()
-def run():
+def run(
+    role: str = typer.Option(
+        None, "--role", "-r", help="Agent role: 'green' or 'white'"
+    ),
+):
+    """Start an agent (green or white).
+
+    Role can be specified via --role flag or ROLE environment variable.
+    Default ports: green=9001, white=9002 (or PORT env var for Cloud Run).
+    """
     settings = MechgaiaSettings()
-    if settings.role == "green":
-        start_green_agent(host=settings.host, port=settings.agent_port)
-    elif settings.role == "white":
-        start_white_agent(host=settings.host, port=settings.agent_port)
+    # Use command-line argument if provided, otherwise use settings (from env var)
+    agent_role = role if role else settings.role
+
+    # Update settings role if provided via CLI
+    if role:
+        settings.role = role
+
+    # Get port using settings method (handles PORT env var and role-based defaults)
+    port = settings.get_port()
+
+    if agent_role == "green":
+        start_green_agent(host=settings.host, port=port)
+    elif agent_role == "white":
+        start_white_agent(host=settings.host, port=port)
     else:
-        raise ValueError(f"Unknown role: {settings.role}")
+        raise ValueError(
+            f"Unknown role: {agent_role}. "
+            f"Please specify --role green or --role white, or set ROLE environment variable."
+        )
     return
 
 
@@ -58,7 +101,7 @@ def launch(
     """
     levels_list = None
     if levels:
-        levels_list = [l.strip().upper() for l in levels.split(",")]
+        levels_list = [level.strip().upper() for level in levels.split(",")]
 
     if level:
         level = level.upper()
@@ -84,7 +127,7 @@ def launch_remote(
     """
     levels_list = None
     if levels:
-        levels_list = [l.strip() for l in levels.split(",")]
+        levels_list = [level.strip() for level in levels.split(",")]
 
     asyncio.run(
         launch_remote_evaluation(
