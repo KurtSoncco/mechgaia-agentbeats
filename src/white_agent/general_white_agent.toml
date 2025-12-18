@@ -1,0 +1,14 @@
+name = "general_white_agent"
+description = "A general-purpose white agent for task fulfillment."
+version = "1.0.0"
+
+defaultInputModes = ["text/plain"]
+defaultOutputModes = ["text/plain"]
+[capabilities]
+streaming = false
+
+[[skills]]
+id = "task_fulfillment"
+name = "Task Fulfillment"
+description = "Handles user requests and completes tasks"
+tags = ["general"]

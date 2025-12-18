@@ -58,46 +58,93 @@ async def launch_evaluation(
         # Use single level
         levels_to_evaluate = [level]
     else:
-        # Auto-detect all available levels
-        available_levels = db.get_available_levels()
-        if available_levels:
-            levels_to_evaluate = available_levels
-            print(f"Auto-detected levels: {', '.join(available_levels)}")
-        else:
-            levels_to_evaluate = None
+        # Default: Use one instance of Level C for testing
+        print("No level specified. Defaulting to one instance of Level C for testing.")
+        levels_to_evaluate = ["C"]
 
     if levels_to_evaluate:
-        # Validate that all requested levels have tasks
-        valid_levels = []
-        for lvl in levels_to_evaluate:
-            tasks = db.get_tasks_by_level(lvl)
-            if tasks:
-                print(f"Found {len(tasks)} Level {lvl} tasks in database.")
-                valid_levels.append(lvl)
-            else:
-                print(f"Warning: No tasks found for Level {lvl}. Skipping.")
+        # Check if we should use task_instance_ids (for default single instance test)
+        # or levels (for explicit level/levels specification)
+        use_single_instance = (
+            not levels
+            and not level
+            and len(levels_to_evaluate) == 1
+            and levels_to_evaluate[0] == "C"
+        )
 
-        if valid_levels:
-            print(f"Evaluating Level {', '.join(valid_levels)} tasks...")
-            task_config = {
-                "env": "mechgaia",
-                "user_strategy": "llm",
-                "user_model": "openai/gpt-4o",
-                "user_provider": "openai",
-                "task_split": "test",
-                "levels": valid_levels,
-            }
+        if use_single_instance:
+            # Default behavior: Get one instance of Level C
+            tasks = db.get_tasks_by_level("C")
+            if tasks:
+                print(f"Found {len(tasks)} Level C tasks in database.")
+                # Get instances for the first task
+                instances = db.get_task_instances(task_id=tasks[0]["id"])
+                if instances:
+                    # Use only the first instance
+                    single_instance_id = instances[0]["id"]
+                    print(f"Using single Level C instance: {single_instance_id}")
+                    task_config = {
+                        "env": "mechgaia",
+                        "user_strategy": "llm",
+                        "user_model": "openai/gpt-4o",
+                        "user_provider": "openai",
+                        "task_split": "test",
+                        "task_instance_ids": [single_instance_id],
+                    }
+                else:
+                    print(
+                        "Warning: No instances found for Level C tasks. Using legacy mode."
+                    )
+                    task_config = {
+                        "env": "mechgaia",
+                        "user_strategy": "llm",
+                        "user_model": "openai/gpt-4o",
+                        "user_provider": "openai",
+                        "task_split": "test",
+                        "task_ids": [1],  # Legacy mode
+                    }
+            else:
+                print("Warning: No Level C tasks found. Using legacy mode.")
+                task_config = {
+                    "env": "mechgaia",
+                    "user_strategy": "llm",
+                    "user_model": "openai/gpt-4o",
+                    "user_provider": "openai",
+                    "task_split": "test",
+                    "task_ids": [1],  # Legacy mode
+                }
         else:
-            # No valid levels found - use legacy mode
-            print("No valid levels found. Using legacy mode.")
-            task_config = {
-                "env": "mechgaia",
-                "user_strategy": "llm",
-                "user_model": "openai/gpt-4o",
-                "user_provider": "openai",
-                "task_split": "test",
-                "task_ids": [1],  # Legacy mode
-            }
+            # Explicit level/levels specified - evaluate all instances for those levels
+            valid_levels = []
+            for lvl in levels_to_evaluate:
+                tasks = db.get_tasks_by_level(lvl)
+                if tasks:
+                    print(f"Found {len(tasks)} Level {lvl} tasks in database.")
+                    valid_levels.append(lvl)
+                else:
+                    print(f"Warning: No tasks found for Level {lvl}. Skipping.")
+
+            if valid_levels:
+                print(f"Evaluating Level {', '.join(valid_levels)} tasks...")
+                task_config = {
+                    "env": "mechgaia",
+                    "user_strategy": "llm",
+                    "user_model": "openai/gpt-4o",
+                    "user_provider": "openai",
+                    "task_split": "test",
+                    "levels": valid_levels,
+                }
+            else:
+                # No valid levels found - use legacy mode
+                print("No valid levels found. Using legacy mode.")
+                task_config = {
+                    "env": "mechgaia",
+                    "user_strategy": "llm",
+                    "user_model": "openai/gpt-4o",
+                    "user_provider": "openai",
+                    "task_split": "test",
+                    "task_ids": [1],  # Legacy mode
+                }
     else:
         # No tasks in database - use legacy mode
         print("No tasks in database. Using legacy mode.")

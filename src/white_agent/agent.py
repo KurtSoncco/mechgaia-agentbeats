@@ -230,6 +230,7 @@ def start_white_agent(agent_name="general_white_agent", host="localhost", port=9
     agent_url = os.getenv("AGENT_URL_WHITE") or os.getenv("AGENT_URL")
     if not agent_url:
         agent_url = f"http://{host}:{port}"
+    agent_url = agent_url.rstrip("/")
     card = prepare_white_agent_card(agent_url)
 
     request_handler = DefaultRequestHandler(

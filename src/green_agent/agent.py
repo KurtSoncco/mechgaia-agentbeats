@@ -1009,6 +1009,7 @@ def start_green_agent(agent_name="mechgaia_green_agent", host="localhost", port=
     agent_url = os.getenv("AGENT_URL_GREEN") or os.getenv("AGENT_URL")
     if not agent_url:
         agent_url = f"http://{host}:{port}"
+    agent_url = agent_url.rstrip("/")
     agent_card_dict["url"] = agent_url
 
     request_handler = DefaultRequestHandler(
