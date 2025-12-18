@@ -169,6 +169,9 @@ User message: {obs}
         parse_failed = False  # Track if parsing actually failed vs successfully handled as final response
         needs_retry = False  # Track if we need to retry due to format issues
 
+        # Initialize action with a default value to ensure it's always defined
+        action = Action(name=RESPOND_ACTION_NAME, kwargs={"content": white_text})
+
         if "json" not in white_tags:
             # Check if this might be a Level C or D final response with ```json code block
             import re
@@ -817,7 +820,7 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
                         passed_criteria = [
                             name
                             for name in criteria_names
-                            if scores.get(name, 0) >= criteria_threshold
+                            if float(scores.get(name, 0) or 0) >= criteria_threshold
                         ]
                         criteria_percentage = (
                             len(passed_criteria) / len(criteria_names)
@@ -849,7 +852,7 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
                         passed_criteria = [
                             name
                             for name in criteria_names
-                            if scores.get(name, 0) >= criteria_threshold
+                            if float(scores.get(name, 0) or 0) >= criteria_threshold
                         ]
                         criteria_percentage = (
                             len(passed_criteria) / len(criteria_names)
@@ -857,7 +860,7 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
 
                         print("@@@ Level D Criteria Breakdown:")
                         for name in criteria_names:
-                            score = scores.get(name, 0)
+                            score = float(scores.get(name, 0) or 0)
                             status = (
                                 "✓ PASS" if score >= criteria_threshold else "✗ FAIL"
                             )
@@ -869,13 +872,17 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
                         print(
                             f"@@@ Unknown level: {instance['level']}, skipping evaluation"
                         )
-                        scores = {"error": f"Unknown level: {instance['level']}"}
+                        scores = {
+                            "error_code": -1.0
+                        }  # Use float value for type compatibility
                 except Exception as e:
                     print(f"@@@ Error during evaluation: {e}")
                     import traceback
 
                     traceback.print_exc()
-                    scores = {"error": str(e)}
+                    scores = {
+                        "error_code": -1.0
+                    }  # Use float value for type compatibility
 
                 # Store evaluation
                 eval_id = str(uuid.uuid4())
@@ -893,9 +900,9 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
                 #   (quantitative correctness OR qualitative MEJ evaluation)
                 # For Level C: overall_score > 0.7
                 if instance["level"] == "A":
-                    correctness = scores.get("correctness", 0)
-                    overall_score = scores.get("overall_score", 0)
-                    technical_accuracy = scores.get("technical_accuracy", 0)
+                    correctness = float(scores.get("correctness", 0) or 0)
+                    overall_score = float(scores.get("overall_score", 0) or 0)
+                    technical_accuracy = float(scores.get("technical_accuracy", 0) or 0)
                     success = (
                         correctness > 0.5
                         or overall_score > 0.7
@@ -905,9 +912,9 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
                         f"@@@ Level A evaluation: correctness={correctness:.2f}, overall={overall_score:.2f}, technical={technical_accuracy:.2f}, success={success}"
                     )
                 elif instance["level"] == "B":
-                    correctness = scores.get("correctness", 0)
-                    value_tolerance = scores.get("value_tolerance", 0)
-                    mej_overall = scores.get("mej_overall_score", 0)
+                    correctness = float(scores.get("correctness", 0) or 0)
+                    value_tolerance = float(scores.get("value_tolerance", 0) or 0)
+                    mej_overall = float(scores.get("mej_overall_score", 0) or 0)
 
                     # Success criteria: quantitative correctness OR high MEJ score
                     # Quantitative: correctness > 0.9 AND value_tolerance == 1.0 (within tolerance)
@@ -926,7 +933,7 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
                         f"qualitative_pass={qualitative_pass}, partial_credit={partial_credit}, success={success}"
                     )
                 elif instance["level"] == "C":
-                    overall_score = scores.get("overall_score", 0)
+                    overall_score = float(scores.get("overall_score", 0) or 0)
                     # Success if overall_score > 0.7 OR all criteria pass (>= 0.6)
                     criteria_threshold = 0.6
                     criteria_names = [
@@ -936,7 +943,7 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
                         "engineering_judgment",
                     ]
                     all_criteria_pass = all(
-                        scores.get(name, 0) >= criteria_threshold
+                        float(scores.get(name, 0) or 0) >= criteria_threshold
                         for name in criteria_names
                     )
                     success = overall_score > 0.7 or (
@@ -946,7 +953,7 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
                         f"@@@ Level C evaluation: overall_score={overall_score:.2f}, all_criteria_pass={all_criteria_pass}, success={success}"
                     )
                 elif instance["level"] == "D":
-                    overall_score = scores.get("overall_score", 0)
+                    overall_score = float(scores.get("overall_score", 0) or 0)
                     # Success if overall_score > 0.7 OR all criteria pass (>= 0.6)
                     criteria_threshold = 0.6
                     criteria_names = [
@@ -956,7 +963,7 @@ class MechgaiaGreenAgentExecutor(AgentExecutor):
                         "engineering_judgment",
                     ]
                     all_criteria_pass = all(
-                        scores.get(name, 0) >= criteria_threshold
+                        float(scores.get(name, 0) or 0) >= criteria_threshold
                         for name in criteria_names
                     )
                     success = overall_score > 0.7 or (
@@ -1040,10 +1047,19 @@ def start_green_agent(agent_name="mechgaia_green_agent", host="localhost", port=
 
     if agent_url:
         agent_url = agent_url.rstrip("/")
-        # If AGENT_URL is set (by controller or environment), use it as-is
-        # The controller sets the full URL including any path needed
-        agent_card_url = agent_url
-        print(f"[DEBUG] Using agent_card_url: {agent_card_url}", file=sys.stderr)
+        # If AGENT_URL contains /to_agent/ path, strip it for the agent card URL
+        # The agent card URL should be the base URL, not include routing paths
+        if "/to_agent/" in agent_url:
+            # Extract base URL (protocol + domain) up to /to_agent/
+            agent_card_url = agent_url.split("/to_agent/")[0]
+            print(
+                f"[DEBUG] Stripped /to_agent/ path from agent_url. Using base URL: {agent_card_url}",
+                file=sys.stderr,
+            )
+        else:
+            # If AGENT_URL is set (by controller or environment), use it as-is
+            agent_card_url = agent_url
+            print(f"[DEBUG] Using agent_card_url: {agent_card_url}", file=sys.stderr)
     else:
         # Default to localhost for local development
         agent_card_url = f"http://{host}:{port}"
