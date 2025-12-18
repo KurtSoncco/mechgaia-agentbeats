@@ -19,6 +19,8 @@ from src.mechgaia_env.config import config
 
 async def get_agent_card(url: str) -> AgentCard | None:
     # Configure timeout for agent card retrieval
+    # Strip trailing slashes to prevent double slashes when A2ACardResolver adds paths
+    url = url.rstrip("/")
     timeout = httpx.Timeout(
         connect=config.a2a_connect_timeout,
         read=config.a2a_timeout,

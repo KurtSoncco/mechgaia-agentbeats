@@ -1,6 +1,7 @@
 """White agent implementation - the target agent being tested."""
 
 import os
+import sys
 
 import dotenv
 import uvicorn
@@ -226,12 +227,51 @@ For Level C and Level D tasks, you MUST follow this exact format:
 def start_white_agent(agent_name="general_white_agent", host="localhost", port=9002):
     print("Starting white agent...")
 
-    # Determine agent URL: check AGENT_URL_WHITE, then AGENT_URL, then default to localhost
-    agent_url = os.getenv("AGENT_URL_WHITE") or os.getenv("AGENT_URL")
+    # Debug: Print environment variables
+    print("[DEBUG] Environment variables:", file=sys.stderr)
+    print(
+        f"  AGENT_URL_WHITE: {os.getenv('AGENT_URL_WHITE', 'not set')}", file=sys.stderr
+    )
+    print(f"  AGENT_URL: {os.getenv('AGENT_URL', 'not set')}", file=sys.stderr)
+    print(f"  CLOUDRUN_HOST: {os.getenv('CLOUDRUN_HOST', 'not set')}", file=sys.stderr)
+    print(f"  HTTPS_ENABLED: {os.getenv('HTTPS_ENABLED', 'not set')}", file=sys.stderr)
+    print(f"  HOST: {os.getenv('HOST', 'not set')}", file=sys.stderr)
+    print(f"  PORT: {os.getenv('PORT', 'not set')}", file=sys.stderr)
+
+    # Determine agent URL: prioritize AGENT_URL (set by controller), then AGENT_URL_WHITE, then construct from CLOUDRUN_HOST
+    agent_url = os.getenv("AGENT_URL") or os.getenv("AGENT_URL_WHITE")
+
+    if agent_url:
+        print(
+            f"[DEBUG] Using agent_url: {agent_url}",
+            file=sys.stderr,
+        )
+
+    # If AGENT_URL is not set, try to construct from CLOUDRUN_HOST
     if not agent_url:
-        agent_url = f"http://{host}:{port}"
-    agent_url = agent_url.rstrip("/")
-    card = prepare_white_agent_card(agent_url)
+        cloudrun_host = os.getenv("CLOUDRUN_HOST")
+        if cloudrun_host:
+            https_enabled = os.getenv("HTTPS_ENABLED", "false").lower() == "true"
+            protocol = "https" if https_enabled else "http"
+            agent_url = f"{protocol}://{cloudrun_host}"
+            print(
+                f"[DEBUG] Constructed agent_url from CLOUDRUN_HOST: {agent_url}",
+                file=sys.stderr,
+            )
+
+    if agent_url:
+        agent_url = agent_url.rstrip("/")
+        # If AGENT_URL is set (by controller or environment), use it as-is
+        # The controller sets the full URL including any path needed
+        agent_card_url = agent_url
+        print(f"[DEBUG] Using agent_card_url: {agent_card_url}", file=sys.stderr)
+    else:
+        # Default to localhost for local development
+        agent_card_url = f"http://{host}:{port}"
+        print(f"[DEBUG] Using default localhost URL: {agent_card_url}", file=sys.stderr)
+
+    print(f"[DEBUG] Final agent_card URL: {agent_card_url}", file=sys.stderr)
+    card = prepare_white_agent_card(agent_card_url)
 
     request_handler = DefaultRequestHandler(
         agent_executor=GeneralWhiteAgentExecutor(),

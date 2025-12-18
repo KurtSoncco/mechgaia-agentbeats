@@ -2,6 +2,7 @@
 
 import json
 import os
+import sys
 import time
 import tomllib
 import uuid
@@ -1005,12 +1006,51 @@ def start_green_agent(agent_name="mechgaia_green_agent", host="localhost", port=
     print("Starting green agent...")
     agent_card_dict = load_agent_card_toml(agent_name)
 
-    # Determine agent URL: check AGENT_URL_GREEN, then AGENT_URL, then default to localhost
-    agent_url = os.getenv("AGENT_URL_GREEN") or os.getenv("AGENT_URL")
+    # Debug: Print environment variables
+    print("[DEBUG] Environment variables:", file=sys.stderr)
+    print(
+        f"  AGENT_URL_GREEN: {os.getenv('AGENT_URL_GREEN', 'not set')}", file=sys.stderr
+    )
+    print(f"  AGENT_URL: {os.getenv('AGENT_URL', 'not set')}", file=sys.stderr)
+    print(f"  CLOUDRUN_HOST: {os.getenv('CLOUDRUN_HOST', 'not set')}", file=sys.stderr)
+    print(f"  HTTPS_ENABLED: {os.getenv('HTTPS_ENABLED', 'not set')}", file=sys.stderr)
+    print(f"  HOST: {os.getenv('HOST', 'not set')}", file=sys.stderr)
+    print(f"  PORT: {os.getenv('PORT', 'not set')}", file=sys.stderr)
+
+    # Determine agent URL: prioritize AGENT_URL (set by controller), then AGENT_URL_GREEN, then construct from CLOUDRUN_HOST
+    agent_url = os.getenv("AGENT_URL") or os.getenv("AGENT_URL_GREEN")
+
+    if agent_url:
+        print(
+            f"[DEBUG] Using agent_url: {agent_url}",
+            file=sys.stderr,
+        )
+
+    # If AGENT_URL is not set, try to construct from CLOUDRUN_HOST
     if not agent_url:
-        agent_url = f"http://{host}:{port}"
-    agent_url = agent_url.rstrip("/")
-    agent_card_dict["url"] = agent_url
+        cloudrun_host = os.getenv("CLOUDRUN_HOST")
+        if cloudrun_host:
+            https_enabled = os.getenv("HTTPS_ENABLED", "false").lower() == "true"
+            protocol = "https" if https_enabled else "http"
+            agent_url = f"{protocol}://{cloudrun_host}"
+            print(
+                f"[DEBUG] Constructed agent_url from CLOUDRUN_HOST: {agent_url}",
+                file=sys.stderr,
+            )
+
+    if agent_url:
+        agent_url = agent_url.rstrip("/")
+        # If AGENT_URL is set (by controller or environment), use it as-is
+        # The controller sets the full URL including any path needed
+        agent_card_url = agent_url
+        print(f"[DEBUG] Using agent_card_url: {agent_card_url}", file=sys.stderr)
+    else:
+        # Default to localhost for local development
+        agent_card_url = f"http://{host}:{port}"
+        print(f"[DEBUG] Using default localhost URL: {agent_card_url}", file=sys.stderr)
+
+    print(f"[DEBUG] Final agent_card URL: {agent_card_url}", file=sys.stderr)
+    agent_card_dict["url"] = agent_card_url
 
     request_handler = DefaultRequestHandler(
         agent_executor=MechgaiaGreenAgentExecutor(),
